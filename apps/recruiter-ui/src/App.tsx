@@ -13,6 +13,7 @@ const ClaimGraph3D = lazy(() =>
 export default function App() {
   const [activeNodeId, setActiveNodeId] = useState<string>("root");
   const [showCv, setShowCv] = useState<boolean>(false);
+  const [hudCollapsed, setHudCollapsed] = useState<boolean>(false);
   const [proofHex, setProofHex] = useState<string>("0x");
   const [publicSignalsRaw, setPublicSignalsRaw] = useState<string>("0");
   const [verifyState, setVerifyState] = useState<"idle" | "verifying" | "success" | "error">("idle");
@@ -115,77 +116,89 @@ export default function App() {
           </Suspense>
         </ErrorBoundary>
       </section>
-      <section className="hud">
-        <div className="hud-card">
-          <div className="hud-title">Wallet</div>
-          {isConnected ? (
-            <div className="wallet-row">
-              <span className="wallet-address">{address}</span>
-              <button className="hud-btn ghost" onClick={() => disconnect()}>
-                Disconnect
+      <section className={hudCollapsed ? "hud-shell collapsed" : "hud-shell"}>
+        <div className="hud">
+          <div className="hud-card">
+            <div className="hud-title">Wallet</div>
+            {isConnected ? (
+              <div className="wallet-row">
+                <span className="wallet-address">{address}</span>
+                <button className="hud-btn ghost" onClick={() => disconnect()}>
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <button
+                className="hud-btn"
+                onClick={() => connect({ connector: connectors[0] })}
+                disabled={isPending}
+              >
+                {isPending ? "Connecting..." : "Connect Wallet"}
               </button>
-            </div>
-          ) : (
+            )}
+            {connectError && <p className="hud-error">{connectError.message}</p>}
+            {chainMismatch && (
+              <div className="chain-warning">
+                <span>Wrong network.</span>
+                <button
+                  className="hud-btn ghost"
+                  onClick={() => switchChain({ chainId: expectedChainId })}
+                >
+                  Switch
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="hud-card">
+            <div className="hud-title">Proof</div>
+            <label className="hud-label">
+              Proof Hex
+              <input
+                className="hud-input"
+                value={proofHex}
+                onChange={(event) => setProofHex(event.target.value)}
+                placeholder="0x..."
+              />
+            </label>
+            <label className="hud-label">
+              Public Signals
+              <input
+                className="hud-input"
+                value={publicSignalsRaw}
+                onChange={(event) => setPublicSignalsRaw(event.target.value)}
+                placeholder="1,2,3"
+              />
+            </label>
             <button
               className="hud-btn"
-              onClick={() => connect({ connector: connectors[0] })}
-              disabled={isPending}
+              onClick={handleVerify}
+              disabled={!isConnected || verifyState === "verifying" || chainMismatch}
             >
-              {isPending ? "Connecting..." : "Connect Wallet"}
+              {verifyState === "verifying" ? "Verifying..." : "Verify CV"}
             </button>
-          )}
-          {connectError && <p className="hud-error">{connectError.message}</p>}
-          {chainMismatch && (
-            <div className="chain-warning">
-              <span>Wrong network.</span>
-              <button className="hud-btn ghost" onClick={() => switchChain({ chainId: expectedChainId })}>
-                Switch
-              </button>
-            </div>
-          )}
-        </div>
-        <div className="hud-card">
-          <div className="hud-title">Proof</div>
-          <label className="hud-label">
-            Proof Hex
-            <input
-              className="hud-input"
-              value={proofHex}
-              onChange={(event) => setProofHex(event.target.value)}
-              placeholder="0x..."
-            />
-          </label>
-          <label className="hud-label">
-            Public Signals
-            <input
-              className="hud-input"
-              value={publicSignalsRaw}
-              onChange={(event) => setPublicSignalsRaw(event.target.value)}
-              placeholder="1,2,3"
-            />
-          </label>
-          <button
-            className="hud-btn"
-            onClick={handleVerify}
-            disabled={!isConnected || verifyState === "verifying" || chainMismatch}
-          >
-            {verifyState === "verifying" ? "Verifying..." : "Verify CV"}
-          </button>
-          <p className={verifyState === "error" ? "hud-error" : "hud-message"}>{verifyMessage}</p>
-          {txHash && <p className="hud-meta">Tx: {txHash}</p>}
-          {proofHash && <p className="hud-meta">Proof hash: {proofHash}</p>}
-        </div>
-        <div className="hud-card">
-          <div className="hud-title">Highlights</div>
-          <ul className="hud-list">
-            {highlights.map((item) => (
-              <li key={item.id} className={verifyState === "success" ? "hud-pill active" : "hud-pill"}>
-                {item.label}
-              </li>
-            ))}
-          </ul>
+            <p className={verifyState === "error" ? "hud-error" : "hud-message"}>{verifyMessage}</p>
+            {txHash && <p className="hud-meta">Tx: {txHash}</p>}
+            {proofHash && <p className="hud-meta">Proof hash: {proofHash}</p>}
+          </div>
+          <div className="hud-card">
+            <div className="hud-title">Highlights</div>
+            <ul className="hud-list">
+              {highlights.map((item) => (
+                <li key={item.id} className={verifyState === "success" ? "hud-pill active" : "hud-pill"}>
+                  {item.label}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
+      <button
+        className={hudCollapsed ? "hud-toggle collapsed" : "hud-toggle"}
+        onClick={() => setHudCollapsed((prev) => !prev)}
+        aria-label={hudCollapsed ? "Expand controls" : "Collapse controls"}
+      >
+        {hudCollapsed ? ">" : "<"}
+      </button>
       <button
         className={showCv ? "cv-toggle open" : "cv-toggle"}
         onClick={() => setShowCv((prev) => !prev)}

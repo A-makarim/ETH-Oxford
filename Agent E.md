@@ -108,3 +108,7 @@
 - Removed React.StrictMode wrapper in recruiter UI entry to avoid double-mount issues that can blank the 3D graph during dev.
 - Added a lightweight error boundary + boot-error overlay so if the graph or runtime crashes, the UI shows a visible error instead of a blank black screen.
 - Added Vite dedupe + optimizeDeps entries for react/react-dom/three/force-graph to avoid multi-React or prebundle issues (fixes useRef null crash).
+- Added a collapsible left HUD (wallet/proof/highlights) with a single toggle button to collapse and expand.
+- Fixed HUD collapse so the panel slides fully offscreen while the toggle button stays visible and can restore it.
+- Added sleek hover tooltip for graph nodes showing label and sublabel near the cursor.
+- Removed the default ForceGraph hover tooltip and added a custom hover card with quick wipe-down animation for the tooltip and text.

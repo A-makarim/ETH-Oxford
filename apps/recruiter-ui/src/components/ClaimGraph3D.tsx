@@ -86,6 +86,8 @@ export function ClaimGraph3D({ activeNodeId, onSelectNode, blueprintNodes }: Cla
   const graphRef = useRef<any>(null);
   const didFitRef = useRef<boolean>(false);
   const [size, setSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
+  const [pointer, setPointer] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const nodesSource = blueprintNodes && blueprintNodes.length ? blueprintNodes : graphBlueprintNodes;
 
   const graphData = useMemo(() => {
@@ -197,6 +199,24 @@ export function ClaimGraph3D({ activeNodeId, onSelectNode, blueprintNodes }: Cla
 
     observer.observe(element);
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) {
+      return;
+    }
+
+    function handleMove(event: MouseEvent): void {
+      const rect = element.getBoundingClientRect();
+      setPointer({
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    }
+
+    element.addEventListener("mousemove", handleMove);
+    return () => element.removeEventListener("mousemove", handleMove);
   }, []);
 
   useEffect(() => {
@@ -315,7 +335,6 @@ export function ClaimGraph3D({ activeNodeId, onSelectNode, blueprintNodes }: Cla
           backgroundColor="rgba(0,0,0,0)"
           showNavInfo={false}
           enableNodeDrag
-          nodeLabel={(node) => `${(node as GraphNode).label}: ${(node as GraphNode).subLabel}`}
           nodeOpacity={1}
           nodeThreeObject={(node) => nodeObjects.get((node as GraphNode).id) ?? null}
           nodeThreeObjectExtend
@@ -335,6 +354,7 @@ export function ClaimGraph3D({ activeNodeId, onSelectNode, blueprintNodes }: Cla
           linkDirectionalParticleSpeed={0.0044}
           linkDirectionalParticleColor={() => "#ffffff"}
           onNodeClick={(node) => onSelectNode((node as GraphNode).id)}
+          onNodeHover={(node) => setHoverNode((node as GraphNode) ?? null)}
           onNodeDragEnd={(node) => {
             const current = node as GraphNode;
             current.fx = current.x;
@@ -354,6 +374,21 @@ export function ClaimGraph3D({ activeNodeId, onSelectNode, blueprintNodes }: Cla
             didFitRef.current = true;
           }}
         />
+      )}
+      {hoverNode && (
+        <div
+          className="graph-tooltip"
+          key={hoverNode.id}
+          style={{
+            ["--x" as string]: `${pointer.x + 16}px`,
+            ["--y" as string]: `${pointer.y + 12}px`,
+          }}
+        >
+          <div className="graph-tooltip-card">
+            <div className="graph-tooltip-title">{hoverNode.label}</div>
+            <div className="graph-tooltip-sub">{hoverNode.subLabel}</div>
+          </div>
+        </div>
       )}
     </div>
   );
