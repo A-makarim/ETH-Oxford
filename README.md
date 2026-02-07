@@ -11,6 +11,7 @@ Primary coordination document:
 2. Copy `.env.example` to `.env` and fill required values.
 3. Run contract tests: `npm run test:contracts`
 4. Deploy contracts (Flare Coston2): `npm run deploy:testnet`
+5. Build ZK artifacts: `npm run zk:inputs && npm run zk:build && npm run zk:check`
 
 ## Layout
 - `contracts/`: Solidity contracts
@@ -26,5 +27,4 @@ Primary coordination document:
 ## Notes
 - Flare verifier endpoints may require API keys.
 - Plasma indexing is scaffolded with deterministic qualification logic and mock data, ready for RPC integration.
-- ZK circuit file is scaffolded and should be extended with full witness constraints for production readiness.
-
+- ZK flow is fully wired with deterministic vectors, Groth16 pipeline scripts, and real on-chain verifier handoff (`circuits/README.md`).
