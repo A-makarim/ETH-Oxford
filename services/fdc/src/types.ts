@@ -1,4 +1,4 @@
-export type ProviderName = "udemy" | "coursera";
+export type ProviderName = "udemy" | "coursera" | "datacamp" | "edx";
 
 export type EducationSubmitRequest = {
   wallet: string;
@@ -80,6 +80,7 @@ export type PollWeb2JsonRequestResult =
   | {
       state: "verified";
       issuedAt: number;
+      resolvedVotingRoundId?: number;
     };
 
 export type WriteAttestationParams = {
