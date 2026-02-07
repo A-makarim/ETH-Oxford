@@ -101,6 +101,20 @@ function parseStartBlock(latestBlock: number): number {
   return Math.max(0, latestBlock - lookback);
 }
 
+function expectedChainId(): number | null {
+  const raw = process.env.PLASMA_CHAIN_ID;
+  if (!raw || raw.trim().length === 0) {
+    return null;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0 || !Number.isInteger(parsed)) {
+    throw new Error("invalid_PLASMA_CHAIN_ID");
+  }
+
+  return parsed;
+}
+
 export async function fetchTransfersFromRpc(params: RpcIndexParams): Promise<TransferEvent[]> {
   const rpcUrl = process.env.PLASMA_RPC_URL;
   if (!rpcUrl || rpcUrl.trim().length === 0) {
@@ -110,6 +124,10 @@ export async function fetchTransfersFromRpc(params: RpcIndexParams): Promise<Tra
   const provider = new JsonRpcProvider(rpcUrl);
   const [network, latestBlock] = await Promise.all([provider.getNetwork(), provider.getBlockNumber()]);
   const chainId = Number(network.chainId);
+  const configuredChainId = expectedChainId();
+  if (configuredChainId !== null && configuredChainId !== chainId) {
+    throw new Error(`plasma_chain_id_mismatch_expected_${configuredChainId}_actual_${chainId}`);
+  }
   const wallet = getAddress(params.wallet);
   const walletLower = wallet.toLowerCase();
 

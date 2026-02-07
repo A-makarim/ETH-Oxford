@@ -12,4 +12,11 @@ typechain-types/
 *.log
 services/**/dist/
 apps/**/dist/
+services/fdc/.fdc-requests.json
+services/plasma/.plasma-index-cache.json
+tmp_*
+coursera_*
+*.tgz
+package/
+ctn2_schema.yaml
 

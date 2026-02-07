@@ -56,4 +56,28 @@ describe("evaluateEmployment", () => {
 
     assert.equal(result.qualifies, false);
   });
+
+  it("demo_one_payment mode qualifies with one valid payment", () => {
+    const singlePayment = [positiveTransfers[0]];
+    const strict = evaluateEmployment(FIXTURE_WALLET, singlePayment, employers, stablecoins);
+    const demo = evaluateEmployment(FIXTURE_WALLET, singlePayment, employers, stablecoins, {
+      ruleMode: "demo_one_payment"
+    });
+
+    assert.equal(strict.qualifies, false);
+    assert.equal(demo.qualifies, true);
+    assert.equal(demo.employer?.toLowerCase(), EMPLOYER_A.toLowerCase());
+    assert.equal(demo.paymentCount, 1);
+  });
+
+  it("demo_one_payment remains deterministic", () => {
+    const one = evaluateEmployment(FIXTURE_WALLET, positiveTransfers, employers, stablecoins, {
+      ruleMode: "demo_one_payment"
+    });
+    const two = evaluateEmployment(FIXTURE_WALLET, positiveTransfers, employers, stablecoins, {
+      ruleMode: "demo_one_payment"
+    });
+
+    assert.equal(one.factCommitment, two.factCommitment);
+  });
 });

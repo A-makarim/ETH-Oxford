@@ -40,9 +40,9 @@ function resolveEmployerRegistryAddress(): string {
 }
 
 function resolveProvider(): JsonRpcProvider {
-  const rpcUrl = process.env.FLARE_RPC_URL || process.env.PLASMA_RPC_URL;
+  const rpcUrl = process.env.EMPLOYER_REGISTRY_RPC_URL || process.env.FLARE_RPC_URL || process.env.PLASMA_RPC_URL;
   if (!rpcUrl || rpcUrl.trim().length === 0) {
-    throw new Error("missing_FLARE_RPC_URL");
+    throw new Error("missing_EMPLOYER_REGISTRY_RPC_URL");
   }
 
   return new JsonRpcProvider(rpcUrl);

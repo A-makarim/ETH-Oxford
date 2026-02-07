@@ -1,10 +1,17 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { getAddress } from "ethers";
 import { requireAddressCsv } from "./config.js";
 import { resolveRegisteredEmployers } from "./employerResolver.js";
 import { evaluateEmployment } from "./qualification.js";
+import type { EmploymentRuleMode } from "./qualification.js";
 import { loadTransfersForWallet } from "./transferSource.js";
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+loadEnv();
+loadEnv({ path: resolve(moduleDir, "../../../.env"), override: false });
 
 const app = express();
 app.use(express.json());
@@ -15,6 +22,14 @@ function fallbackUrl(): string | undefined {
     return undefined;
   }
   return configured;
+}
+
+function ruleMode(): EmploymentRuleMode {
+  const mode = (process.env.PLASMA_RULE_MODE || "strict_3_months").trim();
+  if (mode === "strict_3_months" || mode === "demo_one_payment") {
+    return mode;
+  }
+  throw new Error("invalid_PLASMA_RULE_MODE");
 }
 
 app.get("/health", (_req, res) => {
@@ -37,7 +52,9 @@ app.get("/plasma/employment/:wallet", async (req, res) => {
       candidates: candidateEmployers
     });
 
-    const result = evaluateEmployment(wallet, transferSource.transfers, employers, stablecoins);
+    const result = evaluateEmployment(wallet, transferSource.transfers, employers, stablecoins, {
+      ruleMode: ruleMode()
+    });
 
     if (transferSource.dataSource === "fallback") {
       console.warn(

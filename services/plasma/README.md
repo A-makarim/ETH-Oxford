@@ -18,14 +18,16 @@
 3. `STABLECOIN_ALLOWLIST` (comma-separated token addresses)
 
 ## Optional Environment
-1. `PLASMA_CHAIN_ID` (reserved for deployment/runtime checks)
+1. `PLASMA_CHAIN_ID` (if set, service enforces RPC chain-id match)
 2. `EMPLOYER_REGISTRY_ADDRESS` (on-chain employer registry contract; if omitted, service reads from `deployments/testnet/addresses.latest.json`)
-3. `PLASMA_FALLBACK_URL` (fallback indexer URL; supports `{wallet}` placeholder)
-4. `PLASMA_START_BLOCK` (absolute start block for indexing)
-5. `PLASMA_LOOKBACK_BLOCKS` (default lookback if start block omitted)
-6. `PLASMA_LOG_CHUNK_SIZE` (RPC log pagination size)
-7. `PLASMA_REORG_DEPTH` (re-query window depth for reorg safety)
-8. `PLASMA_INDEX_CACHE_PATH` (default `services/plasma/.plasma-index-cache.json`)
+3. `EMPLOYER_REGISTRY_RPC_URL` (RPC used to read `EmployerRegistry`; defaults to `FLARE_RPC_URL`, then `PLASMA_RPC_URL`)
+4. `PLASMA_FALLBACK_URL` (fallback indexer URL; supports `{wallet}` placeholder)
+5. `PLASMA_START_BLOCK` (absolute start block for indexing)
+6. `PLASMA_LOOKBACK_BLOCKS` (default lookback if start block omitted)
+7. `PLASMA_LOG_CHUNK_SIZE` (RPC log pagination size)
+8. `PLASMA_REORG_DEPTH` (re-query window depth for reorg safety)
+9. `PLASMA_INDEX_CACHE_PATH` (default `services/plasma/.plasma-index-cache.json`)
+10. `PLASMA_RULE_MODE` (`strict_3_months` default, or `demo_one_payment` for demo-only relaxed rule)
 
 ## Fallback Adapter Contract
 1. Service calls `PLASMA_FALLBACK_URL` with query params `wallet` and `tokens`.

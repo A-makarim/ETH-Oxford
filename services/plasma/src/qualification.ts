@@ -1,8 +1,14 @@
 import { keccak256, toUtf8Bytes } from "ethers";
 import type { EmploymentResult, TransferEvent } from "./types.js";
 
+export type EmploymentRuleMode = "strict_3_months" | "demo_one_payment";
+
 type EmploymentResultWithToken = Omit<EmploymentResult, "factCommitment"> & {
   token: string | null;
+};
+
+type EvaluateEmploymentOptions = {
+  ruleMode?: EmploymentRuleMode;
 };
 
 function monthKey(timestamp: number): string {
@@ -138,34 +144,57 @@ function withCommitment(result: EmploymentResultWithToken): EmploymentResult {
 type QualifiedCandidate = {
   wallet: string;
   employer: string;
-  monthsMatched: [string, string, string];
+  monthsMatched: string[];
   paymentCount: number;
   token: string;
   qualifies: true;
 };
 
-export function evaluateEmployment(
+function sortTransfers(transfers: TransferEvent[]): TransferEvent[] {
+  return [...transfers].sort((a, b) => {
+    if (a.blockNumber !== b.blockNumber) {
+      return a.blockNumber - b.blockNumber;
+    }
+    if (a.logIndex !== b.logIndex) {
+      return a.logIndex - b.logIndex;
+    }
+    const tokenCmp = a.token.toLowerCase().localeCompare(b.token.toLowerCase());
+    if (tokenCmp !== 0) {
+      return tokenCmp;
+    }
+    return a.txHash.toLowerCase().localeCompare(b.txHash.toLowerCase());
+  });
+}
+
+function filterEligibleTransfers(
   wallet: string,
   transfers: TransferEvent[],
   registeredEmployers: Set<string>,
   stablecoinAllowlist: Set<string>
-): EmploymentResult {
+): TransferEvent[] {
   const walletLower = wallet.toLowerCase();
-  const filtered = transfers.filter(
-    (transfer) =>
-      transfer.to.toLowerCase() === walletLower &&
-      registeredEmployers.has(transfer.from.toLowerCase()) &&
-      stablecoinAllowlist.has(transfer.token.toLowerCase())
+  return sortTransfers(
+    transfers.filter(
+      (transfer) =>
+        transfer.to.toLowerCase() === walletLower &&
+        registeredEmployers.has(transfer.from.toLowerCase()) &&
+        stablecoinAllowlist.has(transfer.token.toLowerCase())
+    )
   );
+}
 
-  const byEmployer = new Map<string, TransferEvent[]>();
-  for (const transfer of filtered) {
-    const employer = transfer.from.toLowerCase();
-    const current = byEmployer.get(employer) ?? [];
-    current.push(transfer);
-    byEmployer.set(employer, current);
-  }
+function emptyEmploymentResult(wallet: string): EmploymentResult {
+  return withCommitment({
+    wallet,
+    employer: null,
+    monthsMatched: [],
+    paymentCount: 0,
+    token: null,
+    qualifies: false
+  });
+}
 
+function evaluateStrictThreeMonths(wallet: string, byEmployer: Map<string, TransferEvent[]>): EmploymentResult {
   let best: QualifiedCandidate | null = null;
 
   for (const [employer, employerTransfers] of byEmployer.entries()) {
@@ -199,15 +228,84 @@ export function evaluateEmployment(
   }
 
   if (!best) {
-    return withCommitment({
-      wallet,
-      employer: null,
-      monthsMatched: [],
-      paymentCount: 0,
-      token: null,
-      qualifies: false
-    });
+    return emptyEmploymentResult(wallet);
   }
 
   return withCommitment(best);
+}
+
+function evaluateDemoOnePayment(wallet: string, byEmployer: Map<string, TransferEvent[]>): EmploymentResult {
+  let best: QualifiedCandidate | null = null;
+
+  for (const [employer, employerTransfers] of byEmployer.entries()) {
+    if (employerTransfers.length === 0) {
+      continue;
+    }
+
+    const token = resolveToken(employerTransfers);
+    if (!token) {
+      continue;
+    }
+
+    const uniqueMonths = [...new Set(employerTransfers.map((transfer) => monthKey(transfer.timestamp)))].sort(
+      (a, b) => parseMonthKey(a) - parseMonthKey(b)
+    );
+
+    const candidate: QualifiedCandidate = {
+      wallet,
+      employer,
+      monthsMatched: uniqueMonths.slice(0, 3),
+      paymentCount: employerTransfers.length,
+      token,
+      qualifies: true
+    };
+
+    if (!best) {
+      best = candidate;
+      continue;
+    }
+
+    if (candidate.paymentCount > best.paymentCount) {
+      best = candidate;
+      continue;
+    }
+
+    if (candidate.paymentCount === best.paymentCount && candidate.employer < best.employer) {
+      best = candidate;
+    }
+  }
+
+  if (!best) {
+    return emptyEmploymentResult(wallet);
+  }
+
+  return withCommitment(best);
+}
+
+export function evaluateEmployment(
+  wallet: string,
+  transfers: TransferEvent[],
+  registeredEmployers: Set<string>,
+  stablecoinAllowlist: Set<string>,
+  options: EvaluateEmploymentOptions = {}
+): EmploymentResult {
+  const mode = options.ruleMode ?? "strict_3_months";
+  const filtered = filterEligibleTransfers(wallet, transfers, registeredEmployers, stablecoinAllowlist);
+  if (filtered.length === 0) {
+    return emptyEmploymentResult(wallet);
+  }
+
+  const byEmployer = new Map<string, TransferEvent[]>();
+  for (const transfer of filtered) {
+    const employer = transfer.from.toLowerCase();
+    const current = byEmployer.get(employer) ?? [];
+    current.push(transfer);
+    byEmployer.set(employer, current);
+  }
+
+  if (mode === "demo_one_payment") {
+    return evaluateDemoOnePayment(wallet, byEmployer);
+  }
+
+  return evaluateStrictThreeMonths(wallet, byEmployer);
 }
