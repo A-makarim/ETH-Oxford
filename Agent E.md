@@ -1,0 +1,110 @@
+# Agent E (Frontend) Progress Log
+
+## 2026-02-07
+- Reviewed recruiter UI skeleton in `apps/recruiter-ui`.
+- Captured current flow: wallet connect, proof input, on-chain verify, and basic CV highlight state.
+- Next: propose UI direction and component structure once visual direction is confirmed.
+- Implemented a dark-themed recruiter console layout with search + autosuggest, graph-style CV map, side panel, and CV snapshot highlighting.
+- Added mock application data and node-to-CV mapping for interaction wiring.
+- Switched graph to a radial hierarchy with computed node positions and grow-out animation for nodes and edges.
+- Converted CV panel into a vertical timeline with node-driven highlight states.
+- Refined side panel video into a compact mini card pattern.
+- Installed recruiter UI dependencies and validated with `npm run build` in `apps/recruiter-ui`.
+- Reworked graph interaction to Obsidian-like draggable dot nodes with connected lines and compact labels.
+- Added drag behavior so recruiters can reposition nodes in real time while keeping click-to-highlight for timeline entries.
+- Refined graph canvas styling with subtle grid texture and softer relationship edges.
+- Revalidated frontend build after drag graph changes.
+- Replaced custom graph renderer with `react-force-graph-3d` + `three` for force physics, connected links, and richer interaction.
+- Added dedicated component `apps/recruiter-ui/src/components/ClaimGraph3D.tsx` to isolate graph logic and reduce merge conflicts.
+- Enabled elastic behavior through force tuning (charge, link distance/strength, velocity decay), drag-and-release, zoom, and rotation.
+- Added active-node visual emphasis with brighter links and directional particles for better interaction feedback.
+- Lazy-loaded the 3D graph component to keep initial app chunk smaller.
+- Revalidated frontend build after 3D graph integration.
+- Simplified UI to graph-only mode per request: removed search, panels, forms, timeline, and non-graph elements from `App.tsx`.
+- Re-themed experience to pure black with subtle grid and glow-focused styling in `styles.css`.
+- Updated `ClaimGraph3D` visual tuning to white/glowy nodes and fully connected elastic links.
+- Revalidated build after graph-only dark theme conversion.
+- Removed remaining rounded/outlined graph container shell and set full viewport background to pure black.
+- Reduced link thickness substantially for a slimmer graph aesthetic (active and inactive links).
+- Kept glow behavior while lowering particle stroke weight for cleaner thin-line visuals.
+- Revalidated frontend build after full-black + thin-line update.
+- Reduced links further to ultra-thin weights for a cleaner network look.
+- Replaced flat default node spheres with custom layered 3D node objects (`MeshPhong` core + additive glow shell).
+- Decreased node size while preserving active-node readability through stronger emissive/glow on selection.
+- Revalidated frontend build after thin-links + volumetric node update.
+- Set a uniform link width across all edges to remove active/inactive thickness differences.
+- Revalidated build after uniform link-width update.
+- Replaced hard-edge glow shell with a sprite-based radial gradient glow texture for continuous center-to-edge fade.
+- Added active/inactive material updates on selection so glow intensity and size transition while preserving volumetric look.
+- Added texture lifecycle cleanup and revalidated build after radial-fade glow update.
+- Normalized node sizing so active and inactive nodes use the same core and glow scale.
+- Kept link width uniform and normalized directional particle count to avoid perceived thickness differences.
+- Revalidated build after uniform node/link visual update.
+- Added fullscreen resiliency for graph rendering by refitting camera on viewport/fullscreen changes.
+- Disabled frustum culling on custom node objects to prevent nodes disappearing in fullscreen.
+- Revalidated build after fullscreen stability update.
+- Added explicit resize/fullscreen handlers to sync container size, camera aspect, and renderer size during fullscreen transitions.
+- Added WebGL context lost/restored handlers to prevent nodes disappearing after fullscreen toggles.
+- Revalidated build after fullscreen handling update.
+- Fixed fullscreen sizing race by reading container dimensions directly inside viewport handlers instead of using stale state.
+- Revalidated build after direct size-read fullscreen fix.
+- Switched to built-in force-graph node spheres with `nodeThreeObjectExtend` so nodes remain visible while keeping glow as an additive sprite overlay.
+- Simplified custom node objects to glow-only sprites to avoid node disappearance on click.
+- Revalidated build after node visibility update.
+- Boosted glow intensity and size with a smoother radial fade and larger sprite scale.
+- Increased glow opacity for stronger halo while keeping continuous fade-out.
+- Revalidated build after glow amplification update.
+- Reduced node size further while boosting glow scale and opacity for a smaller core with a more vivid halo.
+- Revalidated build after node size + glow intensification update.
+- Added PDF parsing pipeline (`pdfjs-dist`) to auto-generate graph nodes from the sample CV.
+- Implemented `buildGraphBlueprintFromLines` to derive a hierarchy (sections, entries, bullets) and feed it into the graph.
+- Wired the graph to switch from static blueprint to parsed CV blueprint at runtime.
+- Revalidated build after CV-to-graph integration.
+- Added structured CV drawer rendering from parsed PDF lines, with clickable sections/entries/bullets that highlight graph nodes.
+- Added CV parsing types and a `buildCvGraphFromLines` pipeline to keep node IDs consistent between graph and CV view.
+- Revalidated build after CV-click-to-node linking.
+- Reverted CV drawer to the sleek embedded PDF view; removed clickable CV text rendering.
+- Kept PDF parsing only for graph node generation.
+- Revalidated build after CV drawer rollback.
+- Updated CV parsing to prioritize Experience, Education, and Courses/Coursera sections.
+- Routed Skills/Tools lines into the nearest primary section (Experience > Education > Courses) as bullets.
+- Revalidated build after section-prioritization update.
+- Added graph refit and refresh when parsed nodes change to prevent the view from going black or out-of-frame after CV parsing.
+- Revalidated build after node-source refit update.
+- Reverted the last two changes: removed section-prioritization rules and removed the extra node-source refit/refresh hook.
+- Revalidated build after rollback.
+- Forced a re-mount of the 3D graph when parsed node counts change to avoid black-screen transitions.
+- Reset fit state on graph re-mount and revalidated build.
+- Reverted PDF parsing and auto-node generation; graph is back to static `graphBlueprintNodes` only.
+- Reintroduced PDF parsing focused on Experience, Education, and Courses with sub-branches for entries and bullets.
+- Skills/Tools are attached as sub-branches under the nearest primary section.
+- Revalidated build after primary-section parsing update.
+- Enforced a fixed 3-branch graph (Experience, Education, Courses) with sub-branches from CV entries and bullets.
+- Root node label now uses the first valid line from the CV as the candidate name.
+- Skills/Tools are merged into the closest primary branch (Experience > Education > Courses).
+- Revalidated build after fixed-branch parsing update.
+- Moved `pdfjs-dist` imports inside `loadPdfLines` to avoid module-eval crashes that can blank the UI.
+- Revalidated build after lazy PDF import change.
+- Reworked CV parsing to build a hierarchy of headings → entries → bullet points for node branches.
+- Ordered headings by Experience, Education, Courses, then Skills and other sections.
+- Revalidated build after heading/subheading branch update.
+- Reverted heading/subheading branch change; restored fixed 3-branch structure (Experience, Education, Courses) with bullets.
+- Revalidated build after rollback.
+- Added a minimal CV slide-out drawer with a sleek PDF embed and hidden toolbar.
+- Copied `resume_daad.pdf` into `apps/recruiter-ui/public/` for Vite static serving.
+- Revalidated build after CV drawer integration.
+- Removed the CV close button; arrow toggle is now the only control.
+- Simplified the arrow toggle to a bare glyph with no circular container.
+- Made CV drawer width responsive via `--cv-width` so the panel expands only to its intended limit.
+- Revalidated build after CV toggle and sizing updates.
+- Shifted the node canvas left when the CV drawer is open so the graph remains centered in the remaining space.
+- Revalidated build after centered-graph adjustment.
+- Adjusted `app-shell` width on CV open to `calc(100% - var(--cv-width))` so the graph container truly shrinks and centers in remaining space.
+- Revalidated build after width-based centering fix.
+- Reverted to pre-PDF-parsing state: removed `pdfjs-dist`, deleted `utils/cvGraph.ts`, and restored static graph nodes.
+- Implemented Agent E requirements: wallet connect (wagmi), proof verification flow, status cards, highlights, and chain mismatch handling.
+- Added wagmi provider setup and env `VITE_RPC_URL` for RPC configuration.
+- Revalidated build after frontend workflow wiring.
+- Removed React.StrictMode wrapper in recruiter UI entry to avoid double-mount issues that can blank the 3D graph during dev.
+- Added a lightweight error boundary + boot-error overlay so if the graph or runtime crashes, the UI shows a visible error instead of a blank black screen.
+- Added Vite dedupe + optimizeDeps entries for react/react-dom/three/force-graph to avoid multi-React or prebundle issues (fixes useRef null crash).
