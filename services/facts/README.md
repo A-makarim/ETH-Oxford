@@ -1,23 +1,26 @@
-# Facts Aggregator Service Scaffold
+# Facts Aggregator Service
 
 ## Endpoint
 1. `GET /facts/:wallet`
+2. `GET /health`
 
-## Purpose
-1. Combine education and employment qualifications.
-2. Return commitments needed by ZK witness generation and frontend display.
+## What It Does
+1. Reads employment qualification and commitment from `services/plasma`.
+2. Reads real education attestations from on-chain `AttestationStorage` events.
+3. Computes deterministic commitments used by ZK witness generation.
+4. Returns combined commitment as `keccak256(abi.encode(educationCommitment, employmentCommitment))`.
+
+## Required Environment
+1. `PORT_FACTS` (default `3003`)
+2. `PLASMA_SERVICE_URL` (default `http://localhost:3002`)
+3. `FLARE_RPC_URL`
+
+## Optional Environment
+1. `ATTESTATION_STORAGE_ADDRESS` (if omitted, loaded from `deployments/testnet/addresses.latest.json`)
+2. `FACTS_ATTESTATION_START_BLOCK` (absolute block to start event scans)
+3. `FACTS_ATTESTATION_LOOKBACK_BLOCKS` (default `350000`)
+4. `FACTS_LOG_CHUNK_SIZE` (default `2000`)
 
 ## Run
 1. Ensure `services/plasma` is running.
 2. Start service: `npm run start:facts`
-
-## Required ENV
-1. `PORT_FACTS`
-2. `PLASMA_SERVICE_URL`
-3. `MOCK_EDUCATION_WALLETS`
-
-## TODO for Agent F
-1. Replace mock education qualification source with attestation-backed lookup.
-2. Add provenance fields and response signatures.
-3. Add caching and retry for downstream service failures.
-

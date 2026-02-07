@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
-import { getAddress, keccak256, toUtf8Bytes } from "ethers";
+import { AbiCoder, getAddress, keccak256, toUtf8Bytes } from "ethers";
+import { listEducationAttestationsForWallet } from "./educationSource.js";
 
 type PlasmaResponse = {
   wallet: string;
@@ -14,13 +15,37 @@ type PlasmaResponse = {
 const app = express();
 app.use(express.json());
 
-function asWalletSet(csv: string | undefined): Set<string> {
-  return new Set(
-    (csv || "")
-      .split(",")
-      .map((w) => w.trim().toLowerCase())
-      .filter(Boolean)
+function educationCommitmentPayload(
+  wallet: string,
+  attestation:
+    | {
+        provider: string;
+        certHash: string;
+        attestationId: string;
+        issuedAt: number;
+      }
+    | undefined
+): string {
+  const walletLower = wallet.toLowerCase();
+  if (!attestation) {
+    return [walletLower, "", "", "", "0"].join("|");
+  }
+
+  return [
+    walletLower,
+    attestation.provider.toLowerCase(),
+    attestation.certHash.toLowerCase(),
+    attestation.attestationId.toLowerCase(),
+    String(attestation.issuedAt)
+  ].join("|");
+}
+
+function combinedCommitment(educationCommitment: string, employmentCommitment: string): string {
+  const encoded = AbiCoder.defaultAbiCoder().encode(
+    ["bytes32", "bytes32"],
+    [educationCommitment, employmentCommitment]
   );
+  return keccak256(encoded);
 }
 
 app.get("/health", (_req, res) => {
@@ -40,24 +65,20 @@ app.get("/facts/:wallet", async (req, res) => {
 
     const employment = (await plasmaResp.json()) as PlasmaResponse;
 
-    const mockEducationWallets = asWalletSet(process.env.MOCK_EDUCATION_WALLETS);
-    const educationQualified = mockEducationWallets.has(wallet.toLowerCase());
+    const attestations = await listEducationAttestationsForWallet(wallet);
+    const latestAttestation = attestations[0];
+    const educationQualified = Boolean(latestAttestation);
     const employmentQualified = employment.qualifies;
 
-    const educationCommitment = keccak256(
-      toUtf8Bytes([wallet.toLowerCase(), educationQualified ? "1" : "0", "education"].join("|"))
-    );
+    const educationCommitment = keccak256(toUtf8Bytes(educationCommitmentPayload(wallet, latestAttestation)));
     const employmentCommitment = employment.factCommitment;
-    const combinedCommitment = keccak256(
-      toUtf8Bytes([educationCommitment.toLowerCase(), employmentCommitment.toLowerCase()].join("|"))
-    );
 
     return res.json({
       educationQualified,
       employmentQualified,
       educationCommitment,
       employmentCommitment,
-      combinedCommitment
+      combinedCommitment: combinedCommitment(educationCommitment, employmentCommitment)
     });
   } catch (error) {
     return res.status(400).json({
@@ -70,4 +91,3 @@ const port = Number(process.env.PORT_FACTS || 3003);
 app.listen(port, () => {
   console.log(`Facts service listening on http://localhost:${port}`);
 });
-
