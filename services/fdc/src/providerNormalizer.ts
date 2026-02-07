@@ -7,7 +7,15 @@ type ParsedSource = {
   certificateId: string;
 };
 
-const SOURCE_FETCH_TIMEOUT_MS = Number(process.env.FDC_SOURCE_FETCH_TIMEOUT_MS || 12_000);
+type VerificationRecipe = {
+  id: string;
+  fetchUrl: string;
+  headers: string;
+  postProcessJq: string;
+  abiSignature: string;
+};
+
+const JINA_BASE_URL = (process.env.FDC_JINA_BASE_URL || "https://r.jina.ai/").trim();
 
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) {
@@ -32,7 +40,22 @@ function parseUrl(input: string): URL | null {
 
 function normalizeUrl(url: URL): string {
   url.hash = "";
+  url.search = "";
   return url.toString();
+}
+
+function assertProviderHost(provider: ProviderName, url: URL): void {
+  const host = url.hostname.toLowerCase();
+  const allowedHosts: Record<ProviderName, string[]> = {
+    udemy: ["udemy.com", "www.udemy.com"],
+    coursera: ["coursera.org", "www.coursera.org"],
+    datacamp: ["datacamp.com", "www.datacamp.com"],
+    edx: ["courses.edx.org", "credentials.edx.org"]
+  };
+
+  if (!allowedHosts[provider].includes(host)) {
+    throw new Error(`invalid_${provider}_host_${host}`);
+  }
 }
 
 function parseCertificateSource(provider: ProviderName, source: string): ParsedSource {
@@ -40,6 +63,7 @@ function parseCertificateSource(provider: ProviderName, source: string): ParsedS
 
   if (provider === "udemy") {
     if (maybeUrl) {
+      assertProviderHost(provider, maybeUrl);
       const segments = maybeUrl.pathname.split("/").filter(Boolean);
       const idx = segments.findIndex((segment) => segment.toLowerCase() === "certificate");
       const id = idx >= 0 ? segments[idx + 1] : segments[segments.length - 1];
@@ -63,8 +87,10 @@ function parseCertificateSource(provider: ProviderName, source: string): ParsedS
 
   if (provider === "coursera") {
     if (maybeUrl) {
+      assertProviderHost(provider, maybeUrl);
       const segments = maybeUrl.pathname.split("/").filter(Boolean);
-      const id = segments[segments.length - 1];
+      const idx = segments.findIndex((segment) => segment.toLowerCase() === "verify");
+      const id = idx >= 0 ? segments[idx + 1] : segments[segments.length - 1];
       if (!id) {
         throw new Error("Could not infer Coursera certificate id from URL");
       }
@@ -83,54 +109,103 @@ function parseCertificateSource(provider: ProviderName, source: string): ParsedS
     };
   }
 
+  if (provider === "datacamp") {
+    if (maybeUrl) {
+      assertProviderHost(provider, maybeUrl);
+      const segments = maybeUrl.pathname.split("/").filter(Boolean);
+      const idx = segments.findIndex((segment) => segment.toLowerCase() === "certificate");
+      const id = idx >= 0 ? segments[idx + 1] : segments[segments.length - 1];
+      if (!id) {
+        throw new Error("Could not infer DataCamp certificate id from URL");
+      }
+      return {
+        source,
+        sourceUrl: normalizeUrl(maybeUrl),
+        certificateId: id
+      };
+    }
+
+    const certificateId = source.trim();
+    return {
+      source,
+      sourceUrl: `https://www.datacamp.com/certificate/${encodeURIComponent(certificateId)}`,
+      certificateId
+    };
+  }
+
+  if (provider === "edx") {
+    if (maybeUrl) {
+      assertProviderHost(provider, maybeUrl);
+      const segments = maybeUrl.pathname.split("/").filter(Boolean);
+      const markerIndex = segments.findIndex((segment) =>
+        ["certificates", "credentials"].includes(segment.toLowerCase())
+      );
+      const id = markerIndex >= 0 ? segments[markerIndex + 1] : segments[segments.length - 1];
+      if (!id) {
+        throw new Error("Could not infer edX certificate id from URL");
+      }
+      return {
+        source,
+        sourceUrl: normalizeUrl(maybeUrl),
+        certificateId: id
+      };
+    }
+
+    const certificateId = source.trim();
+    return {
+      source,
+      sourceUrl: `https://courses.edx.org/certificates/${encodeURIComponent(certificateId)}`,
+      certificateId
+    };
+  }
+
   throw new Error(`Unsupported provider ${provider}`);
 }
 
-function buildFdcFetchUrl(sourceUrl: string): string {
-  return `https://api.allorigins.win/get?url=${encodeURIComponent(sourceUrl)}`;
+function buildJinaReaderUrl(sourceUrl: string): string {
+  const normalizedBase = JINA_BASE_URL.endsWith("/") ? JINA_BASE_URL : `${JINA_BASE_URL}/`;
+  return `${normalizedBase}${sourceUrl}`;
 }
 
-async function fetchSourceExcerpt(url: string): Promise<{ sourceUrl: string; excerpt: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), SOURCE_FETCH_TIMEOUT_MS);
+function buildVerificationRecipe(provider: ProviderName, parsed: ParsedSource): VerificationRecipe {
+  const providerLiteral = JSON.stringify(provider);
+  const certificateIdLiteral = JSON.stringify(parsed.certificateId);
+  const certificateIdLowerLiteral = JSON.stringify(parsed.certificateId.toLowerCase());
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      signal: controller.signal
-    });
+  // If the certificate page resolves to one of these generic titles, force ABI type mismatch.
+  // This makes prepareRequest return INVALID and blocks on-chain submission.
+  const providerInvalidTitles: Record<ProviderName, string[]> = {
+    coursera: [],
+    datacamp: ["Learn R, Python & Data Science Online"],
+    edx: ["Page Not Found | edX"],
+    udemy: ["Just a moment...", "Online Courses - Learn Anything, On Your Schedule | Udemy"]
+  };
 
-    if (!response.ok) {
-      throw new Error(`source_fetch_failed_${response.status}`);
-    }
+  const invalidTitleCondition =
+    providerInvalidTitles[provider].length > 0
+      ? providerInvalidTitles[provider]
+          .map((title) => `((.data.title // "") == ${JSON.stringify(title)})`)
+          .join(" or ")
+      : "false";
 
-    const payload = (await response.json()) as {
-      status?: { url?: string };
-      contents?: string;
-    };
+  const providerEvidenceChecks: Record<ProviderName, string> = {
+    // Coursera certificate pages are often bot-protected with generic title; use PDF link marker as evidence.
+    coursera: `((.data.content // "") | test("certificate\\\\.v1/pdf/${parsed.certificateId}"))`,
+    // DataCamp/edX should expose the certificate id in rendered content.
+    datacamp: `(((.data.content // "") | test(${certificateIdLiteral})) or ((.data.content // "") | test(${certificateIdLowerLiteral})))`,
+    edx: `(((.data.content // "") | test(${certificateIdLiteral})) or ((.data.content // "") | test(${certificateIdLowerLiteral})))`,
+    // Udemy may surface id in URL or page content depending on response path.
+    udemy: `(((.data.url // "") | test(${certificateIdLiteral})) or ((.data.content // "") | test(${certificateIdLiteral})) or ((.data.content // "") | test(${certificateIdLowerLiteral})))`
+  };
 
-    const sourceUrl = payload.status?.url;
-    if (!sourceUrl || typeof sourceUrl !== "string") {
-      throw new Error("source_fetch_invalid_status_url");
-    }
-
-    if (typeof payload.contents !== "string" || payload.contents.length === 0) {
-      throw new Error("source_fetch_empty_contents");
-    }
-
-    const excerpt = payload.contents.slice(0, 2048);
-    return {
-      sourceUrl,
-      excerpt
-    };
-  } catch (error) {
-    if ((error as Error).name === "AbortError") {
-      throw new Error("source_fetch_timeout");
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  return {
+    id: `${provider}_jina_reader_v1`,
+    fetchUrl: buildJinaReaderUrl(parsed.sourceUrl),
+    headers: '{"Accept":"application/json"}',
+    postProcessJq: `if ((.code == 200) and (.status == 20000) and ((.data.title // "") != "") and (((.data.content // "") | test("Warning: Target URL returned error 404")) | not) and ((${invalidTitleCondition}) | not) and (${providerEvidenceChecks[provider]})) then {url:(.data.url // ""), title:(.data.title // ""), provider:${providerLiteral}, certificateId:${certificateIdLiteral}, proofType:"jina_reader_v1"} else "invalid_certificate" end`,
+    abiSignature:
+      '{"type":"tuple","name":"certificate","components":[{"name":"url","type":"string"},{"name":"title","type":"string"},{"name":"provider","type":"string"},{"name":"certificateId","type":"string"},{"name":"proofType","type":"string"}]}'
+  };
 }
 
 export async function normalizeCertificateInput(payload: EducationSubmitRequest): Promise<NormalizedCertificate> {
@@ -143,15 +218,14 @@ export async function normalizeCertificateInput(payload: EducationSubmitRequest)
   }
 
   const parsed = parseCertificateSource(provider, source);
-  const fdcFetchUrl = buildFdcFetchUrl(parsed.sourceUrl);
-  const snapshot = await fetchSourceExcerpt(fdcFetchUrl);
+  const recipe = buildVerificationRecipe(provider, parsed);
 
   const canonicalCertificate = {
     certificateId: parsed.certificateId,
     provider,
-    snapshotExcerpt: snapshot.excerpt,
-    snapshotUrl: snapshot.sourceUrl,
-    sourceUrl: parsed.sourceUrl
+    sourceUrl: parsed.sourceUrl,
+    verifierSourceUrl: recipe.fetchUrl,
+    verifierRuleId: recipe.id
   };
 
   const canonicalCertificateJson = stableStringify(canonicalCertificate);
@@ -165,14 +239,13 @@ export async function normalizeCertificateInput(payload: EducationSubmitRequest)
     certHash: keccak256(toUtf8Bytes(canonicalCertificateJson)),
     canonicalCertificateJson,
     web2JsonRequestBody: {
-      url: fdcFetchUrl,
+      url: recipe.fetchUrl,
       httpMethod: "GET",
-      headers: "{}",
-      queryParams: "{}",
+      headers: recipe.headers,
+      queryParams: "",
       body: "",
-      postProcessJq: "{url: .status.url, snippet: (.contents | .[0:2048])}",
-      abiSignature:
-        '{"type":"tuple","name":"certificate","components":[{"name":"url","type":"string"},{"name":"snippet","type":"string"}]}'
+      postProcessJq: recipe.postProcessJq,
+      abiSignature: recipe.abiSignature
     }
   };
 }

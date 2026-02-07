@@ -25,7 +25,7 @@ app.use(express.json());
 
 const submitSchema = z.object({
   wallet: z.string(),
-  provider: z.enum(["udemy", "coursera"]),
+  provider: z.enum(["udemy", "coursera", "datacamp", "edx"]),
   certificateUrlOrId: z.string().min(3)
 });
 
@@ -119,7 +119,8 @@ async function processRequest(requestId: string): Promise<void> {
       return;
     }
 
-    const attestationId = deriveAttestationId(record.verifierRequestBytes, record.fdcVotingRoundId);
+    const resolvedVotingRoundId = pollResult.resolvedVotingRoundId ?? record.fdcVotingRoundId;
+    const attestationId = deriveAttestationId(record.verifierRequestBytes, resolvedVotingRoundId);
 
     try {
       const writeResult = await writeEducationAttestation({
@@ -133,6 +134,7 @@ async function processRequest(requestId: string): Promise<void> {
       updateRequest(requestId, {
         status: "verified",
         attestationId,
+        fdcVotingRoundId: resolvedVotingRoundId,
         issuedAt: pollResult.issuedAt,
         txHash: writeResult.txHash ?? undefined,
         reason: writeResult.alreadyExists ? "attestation_already_recorded" : undefined,
@@ -253,7 +255,10 @@ app.get("/fdc/education/status/:requestId", (req, res) => {
     status: statusForApi(record.status),
     attestationId: record.attestationId ?? null,
     txHash: record.txHash ?? null,
-    reason: record.reason ?? null
+    reason: record.reason ?? null,
+    verifierStatus: record.verifierStatus ?? null,
+    fdcVotingRoundId: record.fdcVotingRoundId ?? null,
+    fdcRequestTxHash: record.fdcRequestTxHash ?? null
   });
 });
 
