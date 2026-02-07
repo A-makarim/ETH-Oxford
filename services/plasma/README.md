@@ -1,28 +1,43 @@
-# Plasma Employment Service Scaffold
+# Plasma Employment Service
 
 ## Endpoint
 1. `GET /plasma/employment/:wallet`
+2. `GET /health`
 
-## Purpose
-1. Evaluate stablecoin salary-like payments.
-2. Apply strict 3 consecutive calendar month rule.
-3. Enforce employer registry and stablecoin allowlist filters.
-4. Return deterministic employment fact commitment.
+## What It Does
+1. Indexes incoming ERC20 `Transfer` logs for the wallet from Plasma RPC.
+2. Filters by stablecoin allowlist and registered employers.
+3. Applies strict 3-consecutive-UTC-month employment qualification logic.
+4. Computes deterministic employment fact commitment.
+5. Uses fallback indexer/explorer adapter when RPC path fails.
+6. Persists indexed wallet history to disk and re-queries a reorg window.
 
-## Run
-1. Install root dependencies: `npm install`
-2. Start service: `npm run start:plasma`
+## Required Environment
+1. `PORT_PLASMA` (default `3002`)
+2. `PLASMA_RPC_URL`
+3. `STABLECOIN_ALLOWLIST` (comma-separated token addresses)
 
-## Required ENV
-1. `PORT_PLASMA`
-2. `PLASMA_RPC_URL` (for future RPC implementation)
-3. `PLASMA_CHAIN_ID`
-4. `STABLECOIN_ALLOWLIST`
-5. `MOCK_EMPLOYER_REGISTRY`
+## Optional Environment
+1. `PLASMA_CHAIN_ID` (reserved for deployment/runtime checks)
+2. `EMPLOYER_REGISTRY_ADDRESS` (on-chain employer registry contract; if omitted, service reads from `deployments/testnet/addresses.latest.json`)
+3. `PLASMA_FALLBACK_URL` (fallback indexer URL; supports `{wallet}` placeholder)
+4. `PLASMA_START_BLOCK` (absolute start block for indexing)
+5. `PLASMA_LOOKBACK_BLOCKS` (default lookback if start block omitted)
+6. `PLASMA_LOG_CHUNK_SIZE` (RPC log pagination size)
+7. `PLASMA_REORG_DEPTH` (re-query window depth for reorg safety)
+8. `PLASMA_INDEX_CACHE_PATH` (default `services/plasma/.plasma-index-cache.json`)
 
-## TODO for Agent B
-1. Replace `mockTransfers` with live RPC log indexing on Plasma.
-2. Add explorer/indexer fallback path when RPC fails.
-3. Persist indexed history and add reorg handling.
-4. Add unit tests for date boundary and employer tie-break behavior.
+## Fallback Adapter Contract
+1. Service calls `PLASMA_FALLBACK_URL` with query params `wallet` and `tokens`.
+2. Expected JSON: either `TransferEvent[]` or `{ "transfers": TransferEvent[] }`.
+3. Each transfer requires: `txHash`, `blockNumber`, `logIndex`, `from`, `to`, `token`, `amount`, `timestamp`.
 
+## Tests
+1. Positive and negative wallet fixtures.
+2. UTC month-boundary checks.
+3. Employer tie-break determinism.
+4. Deterministic commitment across reruns.
+5. Fallback source path when RPC fails.
+
+Run tests:
+1. `npm run test --workspace services/plasma`
