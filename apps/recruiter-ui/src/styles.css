@@ -1,0 +1,113 @@
+:root {
+  color-scheme: light;
+  --bg: #f3f6ff;
+  --text: #111827;
+  --card: #ffffff;
+  --border: #d1d5db;
+  --accent: #0f766e;
+  --accent-soft: #d1fae5;
+  --muted: #6b7280;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at 10% 0%, #dbeafe 0%, var(--bg) 45%, #eef2ff 100%);
+  color: var(--text);
+}
+
+.page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+.hero h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.hero p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.65rem 0.95rem;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.layout {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.line {
+  padding: 0.6rem 0.7rem;
+  border-radius: 0.55rem;
+  border: 1px solid transparent;
+  background: #f9fafb;
+}
+
+.line + .line {
+  margin-top: 0.55rem;
+}
+
+.line.verified {
+  background: var(--accent-soft);
+  border-color: #6ee7b7;
+}
+
+.line.muted {
+  color: var(--muted);
+}
+
+label {
+  display: block;
+  margin-bottom: 0.7rem;
+  font-size: 0.9rem;
+}
+
+input {
+  margin-top: 0.4rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.status,
+.message {
+  margin: 0.45rem 0 0;
+  font-size: 0.92rem;
+}
+

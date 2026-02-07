@@ -1,0 +1,13 @@
+{
+  "walletHash": "1234",
+  "salaryCommitment": "5678",
+  "certificateWitnessHash": "91011",
+  "employmentSatisfied": "1",
+  "educationSatisfied": "1",
+  "requiredSkillHash": "4444",
+  "minExperienceMonths": "12",
+  "educationCommitment": "2222",
+  "employmentCommitment": "3333",
+  "result": "1"
+}
+

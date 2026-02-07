@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+coverage/
+artifacts/
+cache/
+typechain-types/
+.env
+.DS_Store
+.idea/
+.vscode/
+*.log
+services/**/dist/
+apps/**/dist/
+

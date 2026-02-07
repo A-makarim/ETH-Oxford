@@ -1,0 +1,33 @@
+{
+  "name": "sovereigncv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SovereignCV scaffold for Flare + Plasma + ZK verification",
+  "workspaces": [
+    "services/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:contracts": "hardhat compile",
+    "test:contracts": "hardhat test",
+    "deploy:testnet": "hardhat run scripts/deploy.ts --network coston2",
+    "start:fdc": "npm run dev --workspace services/fdc",
+    "start:plasma": "npm run dev --workspace services/plasma",
+    "start:facts": "npm run dev --workspace services/facts",
+    "start:ui": "npm run dev --workspace apps/recruiter-ui"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@types/node": "^22.10.1",
+    "dotenv": "^16.4.7",
+    "hardhat": "^2.22.17",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.1.0",
+    "ethers": "^6.13.4"
+  }
+}
+
