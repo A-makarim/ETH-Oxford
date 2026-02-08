@@ -186,7 +186,10 @@ async function getContracts(): Promise<FdcRequestContracts> {
 function inferIssuedAtSeconds(response: unknown): number {
   const fallback = Math.floor(Date.now() / 1000);
   const candidate = findFirstNumericValue(response, new Set(["lowestusedtimestamp", "timestamp", "issuedat"]));
-  return candidate ?? fallback;
+  if (candidate === undefined || candidate <= 0) {
+    return fallback;
+  }
+  return candidate;
 }
 
 function inferVotingRoundId(response: unknown): number | undefined {

@@ -20,3 +20,8 @@ coursera_*
 package/
 ctn2_schema.yaml
 resume_daad.pdf
+circuits/mini.circom
+circuits/mini_art/
+circuits/vectors/valid/public.tamper*.json
+circuits/vectors/generated/
+services/facts/.proof-packages/

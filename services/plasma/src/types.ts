@@ -12,7 +12,9 @@ export type TransferEvent = {
 export type EmploymentResult = {
   wallet: string;
   employer: string | null;
+  token: string | null;
   monthsMatched: string[];
+  monthTransferCounts: number[];
   paymentCount: number;
   qualifies: boolean;
   factCommitment: string;

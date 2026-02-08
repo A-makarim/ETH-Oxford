@@ -1,18 +1,37 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
 import express from "express";
+import cors from "cors";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { AbiCoder, getAddress, keccak256, toUtf8Bytes } from "ethers";
 import { listEducationAttestationsForWallet } from "./educationSource.js";
+import { generateProofPackage, getLatestProofPackage } from "./proofService.js";
+import { getVerificationJob, startVerificationJob, type VerificationCertificateInput } from "./verificationWorkflow.js";
 
 type PlasmaResponse = {
   wallet: string;
   employer: string | null;
+  token: string | null;
   monthsMatched: string[];
+  monthTransferCounts: number[];
   paymentCount: number;
   qualifies: boolean;
   factCommitment: string;
 };
 
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+loadEnv();
+loadEnv({ path: resolve(moduleDir, "../../../.env"), override: true });
+
 const app = express();
+app.use(
+  cors({
+    origin: (process.env.FACTS_CORS_ORIGIN || "http://localhost:5173")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+  })
+);
 app.use(express.json());
 
 function educationCommitmentPayload(
@@ -65,7 +84,7 @@ app.get("/facts/:wallet", async (req, res) => {
 
     const employment = (await plasmaResp.json()) as PlasmaResponse;
 
-    const attestations = await listEducationAttestationsForWallet(wallet);
+    const attestations = await listEducationAttestationsForWallet(wallet, { limit: 1 });
     const latestAttestation = attestations[0];
     const educationQualified = Boolean(latestAttestation);
     const employmentQualified = employment.qualifies;
@@ -85,6 +104,117 @@ app.get("/facts/:wallet", async (req, res) => {
       error: (error as Error).message
     });
   }
+});
+
+app.get("/facts/:wallet/proof/latest", (req, res) => {
+  try {
+    const wallet = getAddress(req.params.wallet);
+    const pkg = getLatestProofPackage(wallet);
+    if (!pkg) {
+      return res.status(404).json({
+        error: "proof_package_not_found"
+      });
+    }
+    return res.json(pkg);
+  } catch (error) {
+    return res.status(400).json({
+      error: (error as Error).message
+    });
+  }
+});
+
+app.post("/facts/:wallet/proof/generate", async (req, res) => {
+  try {
+    const wallet = getAddress(req.params.wallet);
+    const body = (req.body ?? {}) as {
+      requiredSkillHash?: string;
+      minExperienceMonths?: number | string;
+      salaryCommitment?: string;
+      educationExpiryAt?: number | string;
+      employmentExperienceMonths?: number | string;
+      educationSkillHash?: string;
+      attestationId?: string;
+    };
+
+    const pkg = await generateProofPackage({
+      wallet,
+      requiredSkillHash: body.requiredSkillHash,
+      minExperienceMonths: body.minExperienceMonths,
+      salaryCommitment: body.salaryCommitment,
+      educationExpiryAt: body.educationExpiryAt,
+      employmentExperienceMonths: body.employmentExperienceMonths,
+      educationSkillHash: body.educationSkillHash,
+      attestationId: body.attestationId
+    });
+
+    return res.json(pkg);
+  } catch (error) {
+    return res.status(400).json({
+      error: (error as Error).message
+    });
+  }
+});
+
+app.post("/verification/start", (req, res) => {
+  try {
+    const body = (req.body ?? {}) as {
+      wallet?: string;
+      certificates?: VerificationCertificateInput[];
+      requiredSkillHash?: string;
+      minExperienceMonths?: number | string;
+      salaryCommitment?: string;
+      educationExpiryAt?: number | string;
+      employmentExperienceMonths?: number | string;
+      educationSkillHash?: string;
+    };
+
+    if (!body.wallet) {
+      return res.status(400).json({ error: "missing_wallet" });
+    }
+
+    const certificates = Array.isArray(body.certificates) ? body.certificates : [];
+    if (certificates.length === 0) {
+      return res.status(400).json({ error: "missing_certificates" });
+    }
+
+    const invalidCertificate = certificates.find(
+      (certificate) =>
+        !certificate ||
+        !certificate.provider ||
+        !["udemy", "coursera", "datacamp", "edx"].includes(certificate.provider) ||
+        !certificate.certificateUrlOrId
+    );
+    if (invalidCertificate) {
+      return res.status(400).json({ error: "invalid_certificate_payload" });
+    }
+
+    const job = startVerificationJob({
+      wallet: body.wallet,
+      certificates,
+      requiredSkillHash: body.requiredSkillHash,
+      minExperienceMonths: body.minExperienceMonths,
+      salaryCommitment: body.salaryCommitment,
+      educationExpiryAt: body.educationExpiryAt,
+      employmentExperienceMonths: body.employmentExperienceMonths,
+      educationSkillHash: body.educationSkillHash
+    });
+
+    return res.json(job);
+  } catch (error) {
+    return res.status(400).json({
+      error: (error as Error).message
+    });
+  }
+});
+
+app.get("/verification/:jobId", (req, res) => {
+  const job = getVerificationJob(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({
+      error: "verification_job_not_found"
+    });
+  }
+  return res.json(job);
 });
 
 const port = Number(process.env.PORT_FACTS || 3003);

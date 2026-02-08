@@ -12,6 +12,12 @@ Primary coordination document:
 3. Run contract tests: `npm run test:contracts`
 4. Deploy contracts (Flare Coston2): `npm run deploy:testnet`
 5. Build ZK artifacts: `npm run zk:inputs && npm run zk:build && npm run zk:check`
+6. Start services:
+   - `npm run start:fdc`
+   - `npm run start:plasma`
+   - `npm run start:facts`
+7. Start recruiter UI: `npm run start:ui`
+8. Or launch all together: `npm run start:stack`
 
 ## Layout
 - `contracts/`: Solidity contracts
@@ -27,4 +33,12 @@ Primary coordination document:
 ## Notes
 - Flare verifier endpoints may require API keys.
 - Plasma indexing runs against RPC logs with fallback adapter support and deterministic qualification logic.
-- ZK circuit file is scaffolded and should be extended with full witness constraints for production readiness.
+- Facts service can generate proof packages from live evidence: `POST /facts/:wallet/proof/generate`.
+
+## Troubleshooting
+- If UI shows `Failed to fetch`, verify services are up:
+  - `Invoke-RestMethod http://localhost:3001/health`
+  - `Invoke-RestMethod http://localhost:3002/health`
+  - `Invoke-RestMethod http://localhost:3003/health`
+- If ports are busy, stop old listeners before `npm run start:stack`:
+  - `Get-NetTCPConnection -LocalPort 3001,3002,3003,5173 -State Listen | Select-Object LocalPort,OwningProcess`

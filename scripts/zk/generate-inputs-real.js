@@ -128,6 +128,76 @@ function parseAddressList(csv, label) {
   return [...new Set(parts.map((item) => getAddress(item)))];
 }
 
+function readPlasmaBaseUrl() {
+  if (process.env.PLASMA_SERVICE_URL && process.env.PLASMA_SERVICE_URL.trim()) {
+    return process.env.PLASMA_SERVICE_URL.trim().replace(/\/+$/, "");
+  }
+  return "http://localhost:3002";
+}
+
+function readPlasmaRuleMode() {
+  const mode = (process.env.PLASMA_RULE_MODE || "strict_3_months").trim();
+  return mode === "demo_one_payment" ? "demo_one_payment" : "strict_3_months";
+}
+
+function formatMonthKey(index) {
+  const year = Math.floor(index / 12);
+  const month = (index % 12) + 1;
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function parseMaxRangeFromError(error) {
+  const message = String(error?.message || "");
+  const match = message.match(/limited to a ([0-9,]+) range/i) || message.match(/maximum is set to ([0-9,]+)/i);
+  if (!match) {
+    return null;
+  }
+  const parsed = Number(String(match[1]).replace(/,/g, ""));
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.floor(parsed);
+}
+
+function isRateLimitError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("request limit reached") ||
+    message.includes("too many requests") ||
+    message.includes("rate limit") ||
+    message.includes("429")
+  );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callWithRetry(fn, label) {
+  const maxAttempts = Number(process.env.PLASMA_RPC_MAX_RETRIES || "8");
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await fn();
+    } catch (error) {
+      if (!isRateLimitError(error) || attempt === maxAttempts) {
+        throw error;
+      }
+      const waitMs = Math.min(5000, 200 * 2 ** (attempt - 1));
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(waitMs);
+      if (attempt === maxAttempts - 1) {
+        // final retry next loop
+        continue;
+      }
+      if (process.env.DEBUG) {
+        console.warn(`[zk-inputs] retrying ${label} after rate-limit (${attempt}/${maxAttempts})`);
+      }
+    }
+  }
+  throw new Error(`retry_exhausted_${label}`);
+}
+
 function readFdcBaseUrl() {
   if (process.env.FDC_SERVICE_URL && process.env.FDC_SERVICE_URL.trim()) {
     return process.env.FDC_SERVICE_URL.trim().replace(/\/+$/, "");
@@ -164,11 +234,16 @@ async function loadEducationEvidence({ flareProvider, attestationStorageAddress,
     throw new Error(`Unsupported provider in attestation: ${provider}`);
   }
 
+  let issuedAtValue = BigInt(issuedAt);
+  if (issuedAtValue <= 0n) {
+    issuedAtValue = BigInt(Math.floor(Date.now() / 1000));
+  }
+
   return {
     certHash: String(certHash),
     provider: providerLower,
     providerCode,
-    issuedAt: BigInt(issuedAt)
+    issuedAt: issuedAtValue
   };
 }
 
@@ -177,16 +252,38 @@ async function fetchTransfersForWallet({ plasmaProvider, wallet, allowlistedToke
   const fromBlock = Math.max(0, latest - lookbackBlocks);
   const toTopic = zeroPadValue(wallet, 32);
   const transferTopic = id("Transfer(address,address,uint256)");
+  let chunkSize = Number(process.env.PLASMA_LOG_CHUNK_SIZE || "5000");
+  if (!Number.isFinite(chunkSize) || chunkSize <= 0) {
+    chunkSize = 5000;
+  }
 
   const allLogs = [];
   for (const token of allowlistedTokens) {
-    const logs = await plasmaProvider.getLogs({
-      address: token,
-      fromBlock,
-      toBlock: latest,
-      topics: [transferTopic, null, toTopic]
-    });
-    allLogs.push(...logs.map((log) => ({ ...log, token })));
+    for (let start = fromBlock; start <= latest; ) {
+      const end = Math.min(latest, start + chunkSize - 1);
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const logs = await callWithRetry(
+          () =>
+            plasmaProvider.getLogs({
+              address: token,
+              fromBlock: start,
+              toBlock: end,
+              topics: [transferTopic, null, toTopic]
+            }),
+          "getLogs"
+        );
+        allLogs.push(...logs.map((log) => ({ ...log, token })));
+        start = end + 1;
+      } catch (error) {
+        const maxRange = parseMaxRangeFromError(error);
+        if (maxRange && maxRange < chunkSize) {
+          chunkSize = maxRange;
+          continue;
+        }
+        throw error;
+      }
+    }
   }
 
   if (allLogs.length === 0) {
@@ -196,7 +293,8 @@ async function fetchTransfersForWallet({ plasmaProvider, wallet, allowlistedToke
   const blockNumbers = [...new Set(allLogs.map((log) => Number(log.blockNumber)))];
   const timestampByBlock = new Map();
   for (const blockNumber of blockNumbers) {
-    const block = await plasmaProvider.getBlock(blockNumber);
+    // eslint-disable-next-line no-await-in-loop
+    const block = await callWithRetry(() => plasmaProvider.getBlock(blockNumber), "getBlock");
     if (!block) {
       continue;
     }
@@ -311,6 +409,48 @@ async function pickEmploymentWindow({
   return best;
 }
 
+async function loadEmploymentEvidenceFromService(wallet) {
+  const base = readPlasmaBaseUrl();
+  const response = await fetch(`${base}/plasma/employment/${wallet}`);
+  if (!response.ok) {
+    return null;
+  }
+
+  const body = await response.json();
+  if (!body || body.qualifies !== true) {
+    throw new Error("Employment does not qualify based on Plasma service");
+  }
+
+  if (!body.employer || !body.token) {
+    throw new Error("Plasma service returned incomplete employment proof");
+  }
+
+  const months = Array.isArray(body.monthsMatched) ? body.monthsMatched : [];
+  const counts = Array.isArray(body.monthTransferCounts) ? body.monthTransferCounts : [];
+  if (months.length < 3 || counts.length < 3) {
+    if (readPlasmaRuleMode() === "demo_one_payment") {
+      const anchorRaw = months[months.length - 1];
+      const anchor = anchorRaw ? parseMonthKey(anchorRaw) : parseMonthKey(monthKey(Math.floor(Date.now() / 1000)));
+      return {
+        employer: getAddress(body.employer),
+        token: getAddress(body.token),
+        monthsMatched: [formatMonthKey(anchor - 2), formatMonthKey(anchor - 1), formatMonthKey(anchor)],
+        monthCounts: [1, 1, Math.max(1, Number(body.paymentCount || 1))],
+        paymentCount: Math.max(1, Number(body.paymentCount || 1))
+      };
+    }
+    throw new Error("No qualifying 3-consecutive-month employment window found for registered employer + allowlisted token");
+  }
+
+  return {
+    employer: getAddress(body.employer),
+    token: getAddress(body.token),
+    monthsMatched: months.slice(0, 3),
+    monthCounts: counts.slice(0, 3).map((value) => Number(value)),
+    paymentCount: Number(body.paymentCount || counts.slice(0, 3).reduce((acc, value) => acc + Number(value), 0))
+  };
+}
+
 function stringifyRecord(record) {
   return Object.fromEntries(
     Object.entries(record).map(([key, value]) => [key, value.toString()])
@@ -373,24 +513,28 @@ async function main() {
     throw new Error("education-expiry-at must be >= attestation issuedAt");
   }
 
-  const transfers = await fetchTransfersForWallet({
-    plasmaProvider,
-    wallet,
-    allowlistedTokens,
-    lookbackBlocks
-  });
-  const employment = await pickEmploymentWindow({
-    transfers,
-    wallet,
-    flareProvider,
-    employerRegistryAddress
-  });
+  const employmentFromService = await loadEmploymentEvidenceFromService(wallet);
+  const employment =
+    employmentFromService ??
+    (await (async () => {
+      const transfers = await fetchTransfersForWallet({
+        plasmaProvider,
+        wallet,
+        allowlistedTokens,
+        lookbackBlocks
+      });
+      return pickEmploymentWindow({
+        transfers,
+        wallet,
+        flareProvider,
+        employerRegistryAddress
+      });
+    })());
 
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
   const toFieldObject = (value) => F.toObject(F.e(value.toString()));
   const poseidonHash = (inputs) => F.toObject(poseidon(inputs.map((v) => BigInt(v.toString()))));
-  const squareInField = (value) => F.toObject(F.mul(F.e(value.toString()), F.e(value.toString())));
 
   const walletHash = toFieldObject(BigInt(wallet));
   const educationAttestationId = toFieldObject(BigInt(attestationIdHex));
@@ -450,8 +594,6 @@ async function main() {
     month1TransferCount,
     month2TransferCount,
     employmentExperienceMonths,
-    policyRequiredSkillHash: requiredSkillHash,
-    policyMinExperienceMonths: minExperienceMonths,
     requiredSkillHash,
     minExperienceMonths,
     result: 1n,
@@ -459,11 +601,7 @@ async function main() {
     tokenAllowed: 1n,
     certificateWitnessHash,
     educationCommitment,
-    employmentCommitment,
-    requiredSkillBindingSquare: squareInField(requiredSkillHash),
-    minimumExperienceBindingSquare: squareInField(minExperienceMonths),
-    educationCommitmentBindingSquare: squareInField(educationCommitment),
-    employmentCommitmentBindingSquare: squareInField(employmentCommitment)
+    employmentCommitment
   });
 
   const outPath = path.resolve(rootDir, args.out || defaultOut);

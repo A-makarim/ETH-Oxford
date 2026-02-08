@@ -8,17 +8,17 @@ const defaultInput = path.join("circuits", "inputs", "valid.json");
 const defaultOut = path.join("circuits", "vectors", "valid");
 
 function run(cmd, args) {
-  const result = spawnSync(cmd, args, {
+  const command = process.platform === "win32" && cmd === "npx" ? "npx.cmd" : cmd;
+  const result = spawnSync(command, args, {
     cwd: rootDir,
     stdio: "inherit",
-    env: process.env,
-    shell: true
+    env: process.env
   });
   if (result.error) {
     throw result.error;
   }
   if (result.status !== 0) {
-    throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
+    throw new Error(`Command failed: ${command} ${args.join(" ")}`);
   }
 }
 
@@ -92,8 +92,15 @@ function main() {
   const wasmPath = path.join(rootDir, "circuits", "artifacts", "verifySovereignCV_js", "verifySovereignCV.wasm");
   const zkeyPath = path.join(rootDir, "circuits", "artifacts", "verifySovereignCV_final.zkey");
   const vkPath = path.join(rootDir, "circuits", "artifacts", "verification_key.json");
+  const snarkjsCliPath = path.join(rootDir, "node_modules", "snarkjs", "build", "cli.cjs");
 
-  if (!fs.existsSync(witnessGeneratorPath) || !fs.existsSync(wasmPath) || !fs.existsSync(zkeyPath) || !fs.existsSync(vkPath)) {
+  if (
+    !fs.existsSync(witnessGeneratorPath) ||
+    !fs.existsSync(wasmPath) ||
+    !fs.existsSync(zkeyPath) ||
+    !fs.existsSync(vkPath) ||
+    !fs.existsSync(snarkjsCliPath)
+  ) {
     throw new Error("Missing Groth16 artifacts. Run `npm run zk:build` first.");
   }
 
@@ -105,8 +112,8 @@ function main() {
   const calldataPath = path.join(outDir, "calldata.json");
 
   run("node", [witnessGeneratorPath, wasmPath, inputPath, witnessPath]);
-  run("npx", ["snarkjs", "groth16", "prove", zkeyPath, witnessPath, proofPath, publicSignalsPath]);
-  run("npx", ["snarkjs", "groth16", "verify", vkPath, publicSignalsPath, proofPath]);
+  run("node", [snarkjsCliPath, "groth16", "prove", zkeyPath, witnessPath, proofPath, publicSignalsPath]);
+  run("node", [snarkjsCliPath, "groth16", "verify", vkPath, publicSignalsPath, proofPath]);
 
   const proof = JSON.parse(fs.readFileSync(proofPath, "utf-8"));
   const publicSignals = (JSON.parse(fs.readFileSync(publicSignalsPath, "utf-8"))).map(toDecString);
