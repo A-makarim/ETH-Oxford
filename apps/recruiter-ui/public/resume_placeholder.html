@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SovereignCV Placeholder</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #090909;
+        color: #f5f5f5;
+        font-family: "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(640px, 92vw);
+        border: 1px solid #2a2a2a;
+        border-radius: 12px;
+        padding: 24px;
+        background: #121212;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 20px;
+      }
+      p {
+        margin: 8px 0;
+        line-height: 1.45;
+        color: #d1d1d1;
+      }
+      code {
+        color: #a8ffb5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>No CV file configured</h1>
+      <p>Set <code>VITE_CV_URL</code> in your root <code>.env</code> to a local PDF path or hosted CV URL.</p>
+      <p>Example: <code>VITE_CV_URL=/resume_daad.pdf</code></p>
+    </main>
+  </body>
+</html>

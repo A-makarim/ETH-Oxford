@@ -11,6 +11,7 @@
 4. Computes deterministic employment fact commitment.
 5. Uses fallback indexer/explorer adapter when RPC path fails.
 6. Persists indexed wallet history to disk and re-queries a reorg window.
+7. Returns selected employer token and per-month transfer counts for ZK witness generation.
 
 ## Required Environment
 1. `PORT_PLASMA` (default `3002`)

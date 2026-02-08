@@ -29,8 +29,6 @@ function clearPreviousArtifacts() {
     path.join(circuitsDir, "verifySovereignCV_js"),
     path.join(artifactsDir, "verifySovereignCV.r1cs"),
     path.join(artifactsDir, "verifySovereignCV.sym"),
-    path.join(artifactsDir, "pot16_0000.ptau"),
-    path.join(artifactsDir, "pot16_final.ptau"),
     path.join(artifactsDir, "verifySovereignCV_final.zkey"),
     path.join(artifactsDir, "verification_key.json"),
     path.join(artifactsDir, "verifySovereignCV_js")
@@ -40,6 +38,30 @@ function clearPreviousArtifacts() {
       fs.rmSync(itemPath, { recursive: true, force: true });
     }
   }
+}
+
+function ensurePtau() {
+  const finalPtauPath = path.join(artifactsDir, "pot16_final.ptau");
+  if (fs.existsSync(finalPtauPath)) {
+    return;
+  }
+
+  const ptau0 = "circuits/artifacts/pot16_0000.ptau";
+  const ptau1 = "circuits/artifacts/pot16_0001.ptau";
+  const ptauFinal = "circuits/artifacts/pot16_final.ptau";
+
+  run("npx", ["snarkjs", "powersoftau", "new", "bn128", "16", ptau0, "-v"]);
+  run("npx", [
+    "snarkjs",
+    "powersoftau",
+    "contribute",
+    ptau0,
+    ptau1,
+    "--name=sovereigncv-local",
+    "-e=sovereigncv-local-entropy",
+    "-v"
+  ]);
+  run("npx", ["snarkjs", "powersoftau", "prepare", "phase2", ptau1, ptauFinal]);
 }
 
 function main() {
@@ -53,15 +75,7 @@ function main() {
     circuitsDir
   );
 
-  run("npx", ["snarkjs", "powersoftau", "new", "bn128", "16", "circuits/artifacts/pot16_0000.ptau", "-v"]);
-  run("npx", [
-    "snarkjs",
-    "powersoftau",
-    "prepare",
-    "phase2",
-    "circuits/artifacts/pot16_0000.ptau",
-    "circuits/artifacts/pot16_final.ptau"
-  ]);
+  ensurePtau();
 
   run("npx", [
     "snarkjs",

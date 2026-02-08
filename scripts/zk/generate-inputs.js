@@ -19,10 +19,6 @@ function stringifyRecord(record) {
 async function main() {
   const poseidon = await buildPoseidon();
   const F = poseidon.F;
-  const squareInField = (value) => {
-    const element = F.e(value.toString());
-    return F.toObject(F.mul(element, element));
-  };
 
   const base = {
     walletHash: 12003400560078009n,
@@ -41,8 +37,6 @@ async function main() {
     month1TransferCount: 1n,
     month2TransferCount: 3n,
     employmentExperienceMonths: 18n,
-    policyRequiredSkillHash: 77110099n,
-    policyMinExperienceMonths: 12n,
     requiredSkillHash: 77110099n,
     minExperienceMonths: 12n,
     result: 1n,
@@ -88,11 +82,7 @@ async function main() {
     ...base,
     certificateWitnessHash,
     educationCommitment,
-    employmentCommitment,
-    requiredSkillBindingSquare: squareInField(base.requiredSkillHash),
-    minimumExperienceBindingSquare: squareInField(base.minExperienceMonths),
-    educationCommitmentBindingSquare: squareInField(educationCommitment),
-    employmentCommitmentBindingSquare: squareInField(employmentCommitment)
+    employmentCommitment
   });
 
   const missingMonth = (() => {
@@ -114,24 +104,16 @@ async function main() {
       employmentMonth2,
       certificateWitnessHash,
       educationCommitment,
-      employmentCommitment: recomputedEmploymentCommitment,
-      requiredSkillBindingSquare: squareInField(base.requiredSkillHash),
-      minimumExperienceBindingSquare: squareInField(base.minExperienceMonths),
-      educationCommitmentBindingSquare: squareInField(educationCommitment),
-      employmentCommitmentBindingSquare: squareInField(recomputedEmploymentCommitment)
+      employmentCommitment: recomputedEmploymentCommitment
     });
   })();
 
   const invalidCert = stringifyRecord({
     ...base,
-    policyRequiredSkillHash: base.policyRequiredSkillHash + 7n,
+    requiredSkillHash: base.requiredSkillHash + 7n,
     certificateWitnessHash,
     educationCommitment,
-    employmentCommitment,
-    requiredSkillBindingSquare: squareInField(base.requiredSkillHash),
-    minimumExperienceBindingSquare: squareInField(base.minExperienceMonths),
-    educationCommitmentBindingSquare: squareInField(educationCommitment),
-    employmentCommitmentBindingSquare: squareInField(employmentCommitment)
+    employmentCommitment
   });
 
   writeJson(path.join(inputsDir, "valid.json"), valid);

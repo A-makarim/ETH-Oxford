@@ -71,12 +71,6 @@ template VerifySovereignCV() {
     signal input month1TransferCount;
     signal input month2TransferCount;
     signal input employmentExperienceMonths;
-    signal input policyRequiredSkillHash;
-    signal input policyMinExperienceMonths;
-    signal input requiredSkillBindingSquare;
-    signal input minimumExperienceBindingSquare;
-    signal input educationCommitmentBindingSquare;
-    signal input employmentCommitmentBindingSquare;
     signal input employerRegistered;
     signal input tokenAllowed;
 
@@ -99,11 +93,6 @@ template VerifySovereignCV() {
     walletHashNonZero <== 1 - walletHashIsZero.out;
     walletHashNonZero === 1;
 
-    requiredSkillHash === policyRequiredSkillHash;
-    minExperienceMonths === policyMinExperienceMonths;
-    requiredSkillHash * requiredSkillHash === requiredSkillBindingSquare;
-    minExperienceMonths * minExperienceMonths === minimumExperienceBindingSquare;
-
     // Range checks to keep arithmetic bounded.
     component providerCodeBits = Num2Bits(3);
     providerCodeBits.in <== providerCode;
@@ -121,8 +110,8 @@ template VerifySovereignCV() {
     c2Bits.in <== month2TransferCount;
     component expBits = Num2Bits(16);
     expBits.in <== employmentExperienceMonths;
-    component policyMinExpBits = Num2Bits(16);
-    policyMinExpBits.in <== policyMinExperienceMonths;
+    component minExpBits = Num2Bits(16);
+    minExpBits.in <== minExperienceMonths;
     component issuedBits = Num2Bits(64);
     issuedBits.in <== educationIssuedAt;
     component expiryBits = Num2Bits(64);
@@ -162,7 +151,7 @@ template VerifySovereignCV() {
 
     component skillMatches = IsEqual();
     skillMatches.a <== educationSkillHash;
-    skillMatches.b <== policyRequiredSkillHash;
+    skillMatches.b <== requiredSkillHash;
     skillMatches.out === 1;
 
     // Bind certificate witness hash to private certificate fields.
@@ -207,7 +196,7 @@ template VerifySovereignCV() {
 
     component experienceBelowMinimum = LessThan(16);
     experienceBelowMinimum.in[0] <== employmentExperienceMonths;
-    experienceBelowMinimum.in[1] <== policyMinExperienceMonths;
+    experienceBelowMinimum.in[1] <== minExperienceMonths;
     signal experienceSatisfied;
     experienceSatisfied <== 1 - experienceBelowMinimum.out;
     experienceSatisfied === 1;
@@ -251,8 +240,10 @@ template VerifySovereignCV() {
     educationCommitmentCalc.inputs[3] <== educationAttestationId;
     educationCommitmentCalc.inputs[4] <== educationIssuedAt;
 
-    educationCommitment === educationCommitmentCalc.out;
-    educationCommitment * educationCommitment === educationCommitmentBindingSquare;
+    component educationCommitmentMatches = IsEqual();
+    educationCommitmentMatches.a <== educationCommitment;
+    educationCommitmentMatches.b <== educationCommitmentCalc.out;
+    educationCommitmentMatches.out === 1;
 
     component employmentCommitmentCalc = Poseidon(8);
     employmentCommitmentCalc.inputs[0] <== walletHash;
@@ -264,17 +255,18 @@ template VerifySovereignCV() {
     employmentCommitmentCalc.inputs[6] <== totalTransferCount;
     employmentCommitmentCalc.inputs[7] <== employmentSatisfied;
 
-    employmentCommitment === employmentCommitmentCalc.out;
-    employmentCommitment * employmentCommitment === employmentCommitmentBindingSquare;
+    component employmentCommitmentMatches = IsEqual();
+    employmentCommitmentMatches.a <== employmentCommitment;
+    employmentCommitmentMatches.b <== employmentCommitmentCalc.out;
+    employmentCommitmentMatches.out === 1;
 
     signal computedResult;
     computedResult <== educationSatisfied * employmentSatisfied;
 
-    signal resultBindingPublic;
-    resultBindingPublic <== result * result;
-    signal resultBindingPrivate;
-    resultBindingPrivate <== computedResult * computedResult;
-    resultBindingPublic === resultBindingPrivate;
+    component resultMatches = IsEqual();
+    resultMatches.a <== result;
+    resultMatches.b <== computedResult;
+    resultMatches.out === 1;
 
     result === 1;
 }

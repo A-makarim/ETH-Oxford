@@ -1,4 +1,4 @@
-export type ProviderName = "udemy" | "coursera";
+export type ProviderName = "udemy" | "coursera" | "datacamp" | "edx";
 
 export type EducationFact = {
   wallet: string;
@@ -12,8 +12,9 @@ export type EducationFact = {
 export type EmploymentFact = {
   wallet: string;
   employer: string;
-  token: string;
+  token: string | null;
   matchedMonths: [string, string, string];
+  monthTransferCounts: [number, number, number];
   transferCount: number;
   qualifies: boolean;
 };
@@ -25,4 +26,3 @@ export type CVPublicSignals = {
   employmentCommitment: string;
   result: 0 | 1;
 };
-

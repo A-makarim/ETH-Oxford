@@ -20,7 +20,8 @@
     "start:fdc": "npm run dev --workspace services/fdc",
     "start:plasma": "npm run dev --workspace services/plasma",
     "start:facts": "npm run dev --workspace services/facts",
-    "start:ui": "npm run dev --workspace apps/recruiter-ui"
+    "start:ui": "npm run dev --workspace apps/recruiter-ui",
+    "start:stack": "node scripts/start-stack.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^6.1.0",

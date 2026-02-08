@@ -1,5 +1,7 @@
-import "dotenv/config";
+import { config as loadEnv } from "dotenv";
 import { randomUUID } from "node:crypto";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import { getAddress } from "ethers";
 import { z } from "zod";
@@ -12,6 +14,10 @@ import {
 import { normalizeCertificateInput } from "./providerNormalizer.js";
 import { getRequest, listRequestsByStatuses, loadStore, setRequest, updateRequest } from "./store.js";
 import type { EducationStatusRecord } from "./types.js";
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+loadEnv();
+loadEnv({ path: resolve(moduleDir, "../../../.env"), override: true });
 
 const REQUEST_TIMEOUT_MS = Number(process.env.FDC_STATUS_TIMEOUT_MS || 10 * 60_000);
 const POLL_INTERVAL_MS = Number(process.env.FDC_POLL_INTERVAL_MS || 10_000);

@@ -19,11 +19,13 @@
 ## Recruiter UI
 1. Start `npm run start:ui`.
 2. Connect wallet on testnet.
-3. Submit proof and confirm verification tx succeeds.
+3. Load candidate facts from backend.
+4. Generate proof package from backend.
+5. Verify CV and confirm verification tx succeeds.
 
 ## Evidence for Submission
 1. FDC request and attestation tx hash.
 2. Plasma employment endpoint output for qualifying wallet.
-3. Proof verification tx hash and event.
+3. Proof package artifact (`proofBytes`, `publicSignals`, `proofHash`).
+4. Proof verification tx hash and event.
 4. UI screenshot with highlighted verified lines.
-

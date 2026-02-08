@@ -78,31 +78,66 @@ function parseStartBlock(latestBlock: number): number {
     return Math.floor(parsed);
   }
 
-  const lookback = envNumber("FACTS_ATTESTATION_LOOKBACK_BLOCKS", 350_000);
+  const lookback = envNumber("FACTS_ATTESTATION_LOOKBACK_BLOCKS", 5_000);
   return Math.max(0, latestBlock - lookback);
 }
 
-export async function listEducationAttestationsForWallet(wallet: string): Promise<EducationAttestationRecord[]> {
+function parseMaxBlockRangeFromError(error: unknown): number | null {
+  const message = (error as { message?: string })?.message;
+  if (!message) {
+    return null;
+  }
+
+  const exact = message.match(/maximum is set to (\d+)/i);
+  if (exact) {
+    return Number(exact[1]);
+  }
+
+  const generic = message.match(/max(?:imum)?(?:imum)?[^0-9]*(\d+)/i);
+  if (generic) {
+    return Number(generic[1]);
+  }
+
+  return null;
+}
+
+export async function listEducationAttestationsForWallet(
+  wallet: string,
+  options?: { limit?: number }
+): Promise<EducationAttestationRecord[]> {
   const provider = new JsonRpcProvider(resolveRpcUrl());
   const iface = new Interface(attestationStorageAbi);
   const latestBlock = await provider.getBlockNumber();
   const fromBlock = parseStartBlock(latestBlock);
-  const chunkSize = Math.max(100, envNumber("FACTS_LOG_CHUNK_SIZE", 2_000));
+  let chunkSize = Math.max(1, envNumber("FACTS_LOG_CHUNK_SIZE", 30));
   const attestationStorage = resolveAttestationStorageAddress();
   const walletLower = getAddress(wallet).toLowerCase();
+  const limit = options?.limit && options.limit > 0 ? Math.floor(options.limit) : undefined;
 
   const results: EducationAttestationRecord[] = [];
 
-  for (let start = fromBlock; start <= latestBlock; start += chunkSize) {
-    const end = Math.min(latestBlock, start + chunkSize - 1);
-    const logs = await provider.getLogs({
-      address: attestationStorage,
-      fromBlock: start,
-      toBlock: end,
-      topics: [educationEventTopic]
-    });
+  for (let end = latestBlock; end >= fromBlock; ) {
+    const start = Math.max(fromBlock, end - chunkSize + 1);
+    let logs;
 
-    for (const log of logs) {
+    try {
+      logs = await provider.getLogs({
+        address: attestationStorage,
+        fromBlock: start,
+        toBlock: end,
+        topics: [educationEventTopic]
+      });
+    } catch (error) {
+      const maxRange = parseMaxBlockRangeFromError(error);
+      if (maxRange && maxRange > 0 && maxRange < chunkSize) {
+        chunkSize = maxRange;
+        continue;
+      }
+      throw error;
+    }
+
+    for (let index = logs.length - 1; index >= 0; index--) {
+      const log = logs[index];
       const parsed = iface.parseLog({
         topics: [...log.topics],
         data: log.data
@@ -124,7 +159,13 @@ export async function listEducationAttestationsForWallet(wallet: string): Promis
         provider: String(parsed.args.provider),
         issuedAt: Number(parsed.args.issuedAt)
       });
+
+      if (limit && results.length >= limit) {
+        return results;
+      }
     }
+
+    end = start - 1;
   }
 
   return results.sort((a, b) => {

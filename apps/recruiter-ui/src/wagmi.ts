@@ -11,8 +11,8 @@ const sovereignChain = defineChain({
   name: "SovereignCV",
   network: "sovereigncv",
   nativeCurrency: {
-    name: "Ether",
-    symbol: "ETH",
+    name: "Coston2 Flare",
+    symbol: "C2FLR",
     decimals: 18,
   },
   rpcUrls: {

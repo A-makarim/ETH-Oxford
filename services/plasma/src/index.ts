@@ -11,7 +11,7 @@ import { loadTransfersForWallet } from "./transferSource.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
-loadEnv({ path: resolve(moduleDir, "../../../.env"), override: false });
+loadEnv({ path: resolve(moduleDir, "../../../.env"), override: true });
 
 const app = express();
 app.use(express.json());

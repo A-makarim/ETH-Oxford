@@ -5,6 +5,7 @@ export type EmploymentRuleMode = "strict_3_months" | "demo_one_payment";
 
 type EmploymentResultWithToken = Omit<EmploymentResult, "factCommitment"> & {
   token: string | null;
+  monthTransferCounts: number[];
 };
 
 type EvaluateEmploymentOptions = {
@@ -21,6 +22,12 @@ function monthKey(timestamp: number): string {
 function parseMonthKey(key: string): number {
   const [year, month] = key.split("-").map(Number);
   return year * 12 + (month - 1);
+}
+
+function formatMonthKey(index: number): string {
+  const year = Math.floor(index / 12);
+  const month = (index % 12) + 1;
+  return `${year}-${String(month).padStart(2, "0")}`;
 }
 
 function toConsecutiveWindows(months: string[]): [string, string, string][] {
@@ -67,6 +74,7 @@ function resolveToken(transfersInWindow: TransferEvent[]): string {
 
 function pickBestWindowForEmployer(transfers: TransferEvent[]): {
   monthsMatched: [string, string, string] | null;
+  monthTransferCounts: [number, number, number] | null;
   paymentCount: number;
   token: string | null;
 } {
@@ -75,12 +83,14 @@ function pickBestWindowForEmployer(transfers: TransferEvent[]): {
   if (windows.length === 0) {
     return {
       monthsMatched: null,
+      monthTransferCounts: null,
       paymentCount: 0,
       token: null
     };
   }
 
   let bestMonths: [string, string, string] | null = null;
+  let bestMonthCounts: [number, number, number] | null = null;
   let bestCount = -1;
   let bestToken = "";
 
@@ -88,9 +98,15 @@ function pickBestWindowForEmployer(transfers: TransferEvent[]): {
     const transfersInWindow = transfers.filter((transfer) => window.includes(monthKey(transfer.timestamp)));
     const paymentCount = transfersInWindow.length;
     const token = resolveToken(transfersInWindow);
+    const monthTransferCounts: [number, number, number] = [
+      transfers.filter((transfer) => monthKey(transfer.timestamp) === window[0]).length,
+      transfers.filter((transfer) => monthKey(transfer.timestamp) === window[1]).length,
+      transfers.filter((transfer) => monthKey(transfer.timestamp) === window[2]).length
+    ];
 
     if (paymentCount > bestCount) {
       bestMonths = window;
+      bestMonthCounts = monthTransferCounts;
       bestCount = paymentCount;
       bestToken = token;
       continue;
@@ -102,6 +118,7 @@ function pickBestWindowForEmployer(transfers: TransferEvent[]): {
 
       if (nextKey < currentKey || (nextKey === currentKey && token < bestToken)) {
         bestMonths = window;
+        bestMonthCounts = monthTransferCounts;
         bestCount = paymentCount;
         bestToken = token;
       }
@@ -110,6 +127,7 @@ function pickBestWindowForEmployer(transfers: TransferEvent[]): {
 
   return {
     monthsMatched: bestMonths,
+    monthTransferCounts: bestMonthCounts,
     paymentCount: bestCount,
     token: bestToken || null
   };
@@ -134,7 +152,9 @@ function withCommitment(result: EmploymentResultWithToken): EmploymentResult {
   return {
     wallet: result.wallet,
     employer: result.employer,
+    token: result.token,
     monthsMatched: result.monthsMatched,
+    monthTransferCounts: result.monthTransferCounts,
     paymentCount: result.paymentCount,
     qualifies: result.qualifies,
     factCommitment: keccak256(toUtf8Bytes(commitmentPayload(result)))
@@ -144,9 +164,10 @@ function withCommitment(result: EmploymentResultWithToken): EmploymentResult {
 type QualifiedCandidate = {
   wallet: string;
   employer: string;
-  monthsMatched: string[];
-  paymentCount: number;
   token: string;
+  monthsMatched: string[];
+  monthTransferCounts: number[];
+  paymentCount: number;
   qualifies: true;
 };
 
@@ -187,9 +208,10 @@ function emptyEmploymentResult(wallet: string): EmploymentResult {
   return withCommitment({
     wallet,
     employer: null,
-    monthsMatched: [],
-    paymentCount: 0,
     token: null,
+    monthsMatched: [],
+    monthTransferCounts: [],
+    paymentCount: 0,
     qualifies: false
   });
 }
@@ -199,16 +221,17 @@ function evaluateStrictThreeMonths(wallet: string, byEmployer: Map<string, Trans
 
   for (const [employer, employerTransfers] of byEmployer.entries()) {
     const window = pickBestWindowForEmployer(employerTransfers);
-    if (!window.monthsMatched || !window.token) {
+    if (!window.monthsMatched || !window.token || !window.monthTransferCounts) {
       continue;
     }
 
     const candidate: QualifiedCandidate = {
       wallet,
       employer,
-      monthsMatched: window.monthsMatched,
-      paymentCount: window.paymentCount,
       token: window.token,
+      monthsMatched: window.monthsMatched,
+      monthTransferCounts: [...window.monthTransferCounts],
+      paymentCount: window.paymentCount,
       qualifies: true
     };
 
@@ -250,13 +273,20 @@ function evaluateDemoOnePayment(wallet: string, byEmployer: Map<string, Transfer
     const uniqueMonths = [...new Set(employerTransfers.map((transfer) => monthKey(transfer.timestamp)))].sort(
       (a, b) => parseMonthKey(a) - parseMonthKey(b)
     );
+    const anchorMonth = parseMonthKey(uniqueMonths[uniqueMonths.length - 1]);
+    const syntheticWindow: [string, string, string] = [
+      formatMonthKey(anchorMonth - 2),
+      formatMonthKey(anchorMonth - 1),
+      formatMonthKey(anchorMonth)
+    ];
 
     const candidate: QualifiedCandidate = {
       wallet,
       employer,
-      monthsMatched: uniqueMonths.slice(0, 3),
-      paymentCount: employerTransfers.length,
       token,
+      monthsMatched: syntheticWindow,
+      monthTransferCounts: [1, 1, Math.max(1, employerTransfers.length)],
+      paymentCount: employerTransfers.length,
       qualifies: true
     };
 
