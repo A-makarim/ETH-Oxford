@@ -7,12 +7,16 @@ const circuitsDir = path.join(rootDir, "circuits");
 const artifactsDir = path.join(circuitsDir, "artifacts");
 const contractOutPath = path.join(rootDir, "contracts", "Groth16Verifier.sol");
 
-function run(cmd, args) {
+function run(cmd, args, cwd = rootDir) {
   const result = spawnSync(cmd, args, {
-    cwd: rootDir,
+    cwd,
     stdio: "inherit",
-    env: process.env
+    env: process.env,
+    shell: true
   });
+  if (result.error) {
+    throw result.error;
+  }
   if (result.status !== 0) {
     throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
   }
@@ -20,6 +24,9 @@ function run(cmd, args) {
 
 function clearPreviousArtifacts() {
   const pathsToRemove = [
+    path.join(circuitsDir, "verifySovereignCV.r1cs"),
+    path.join(circuitsDir, "verifySovereignCV.sym"),
+    path.join(circuitsDir, "verifySovereignCV_js"),
     path.join(artifactsDir, "verifySovereignCV.r1cs"),
     path.join(artifactsDir, "verifySovereignCV.sym"),
     path.join(artifactsDir, "pot16_0000.ptau"),
@@ -39,17 +46,12 @@ function main() {
   fs.mkdirSync(artifactsDir, { recursive: true });
   clearPreviousArtifacts();
 
-  run("npx", [
-    "circom2",
-    "circuits/verifySovereignCV.circom",
-    "--r1cs",
-    "--wasm",
-    "--sym",
-    "-l",
-    "node_modules",
-    "-o",
-    "circuits/artifacts"
-  ]);
+  // Run from circuits/ so circom writes outputs into circuits/artifacts reliably on Windows.
+  run(
+    "npx",
+    ["circom2", "verifySovereignCV.circom", "--r1cs", "--wasm", "--sym", "-l", "..\\node_modules", "-o", "artifacts"],
+    circuitsDir
+  );
 
   run("npx", ["snarkjs", "powersoftau", "new", "bn128", "16", "circuits/artifacts/pot16_0000.ptau", "-v"]);
   run("npx", [

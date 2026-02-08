@@ -12,6 +12,7 @@
     "test:contracts": "hardhat test",
     "deploy:testnet": "hardhat run scripts/deploy.ts --network coston2",
     "zk:inputs": "node scripts/zk/generate-inputs.js",
+    "zk:inputs:real": "node scripts/zk/generate-inputs-real.js",
     "zk:build": "node scripts/zk/build-artifacts.js",
     "zk:prove": "node scripts/zk/generate-proof.js --input circuits/inputs/valid.json --out circuits/vectors/valid",
     "zk:check": "node scripts/zk/check-vectors.js",

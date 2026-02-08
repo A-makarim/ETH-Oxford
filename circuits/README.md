@@ -53,6 +53,19 @@ Constraint details are in `circuits/CONSTRAINT_SUMMARY.md`.
 npm run zk:inputs
 ```
 
+Real-data input generation (no mock vectors):
+
+```bash
+npm run zk:inputs:real -- --wallet 0x... --fdc-request-id <uuid> --required-skill-hash <uint> --min-experience-months <uint> --salary-commitment <uint> --education-expiry-at <unix> --employment-experience-months <uint> --out circuits/inputs/real.json
+```
+
+You can also pass `--attestation-id 0x...` instead of `--fdc-request-id`.
+This command pulls:
+1. education attestation from `AttestationStorage` on `FLARE_RPC_URL`
+2. transfer logs from `PLASMA_RPC_URL` for `STABLECOIN_ALLOWLIST`
+3. employer registration from `EmployerRegistry`
+and writes a witness input + metadata file.
+
 2. Build Groth16 artifacts + export Solidity verifier:
 
 ```bash

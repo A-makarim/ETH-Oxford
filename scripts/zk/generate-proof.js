@@ -11,8 +11,12 @@ function run(cmd, args) {
   const result = spawnSync(cmd, args, {
     cwd: rootDir,
     stdio: "inherit",
-    env: process.env
+    env: process.env,
+    shell: true
   });
+  if (result.error) {
+    throw result.error;
+  }
   if (result.status !== 0) {
     throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
   }
