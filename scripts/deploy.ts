@@ -18,13 +18,23 @@ async function main() {
 
   const verifierAddressFromEnv = process.env.GROTH16_VERIFIER_ADDRESS;
   let verifierAddress = verifierAddressFromEnv;
+  let rawGroth16VerifierAddress: string | null = null;
 
   if (!verifierAddress) {
-    const mockFactory = await ethers.getContractFactory("MockGroth16Verifier");
-    const mock = await mockFactory.deploy();
-    await mock.waitForDeployment();
-    verifierAddress = await mock.getAddress();
-    console.log(`MockGroth16Verifier deployed: ${verifierAddress}`);
+    const rawVerifierFactory = await ethers.getContractFactory("Groth16Verifier");
+    const rawVerifier = await rawVerifierFactory.deploy();
+    await rawVerifier.waitForDeployment();
+    rawGroth16VerifierAddress = await rawVerifier.getAddress();
+    console.log(`Groth16Verifier deployed: ${rawGroth16VerifierAddress}`);
+
+    const adapterFactory = await ethers.getContractFactory("Groth16VerifierAdapter");
+    const adapter = await adapterFactory.deploy(rawGroth16VerifierAddress);
+    await adapter.waitForDeployment();
+    verifierAddress = await adapter.getAddress();
+    console.log(`Groth16VerifierAdapter deployed: ${verifierAddress}`);
+  }
+  if (!verifierAddress) {
+    throw new Error("Missing GROTH16 verifier address");
   }
 
   const cvVerifierFactory = await ethers.getContractFactory("CVVerifier");
@@ -36,6 +46,7 @@ async function main() {
     chainId: Number((await ethers.provider.getNetwork()).chainId),
     employerRegistry: await registry.getAddress(),
     attestationStorage: await attestation.getAddress(),
+    groth16VerifierRaw: rawGroth16VerifierAddress,
     groth16Verifier: verifierAddress,
     cvVerifier: await cvVerifier.getAddress(),
     deployedAt: new Date().toISOString()
@@ -54,4 +65,3 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
-

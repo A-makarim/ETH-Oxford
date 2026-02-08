@@ -1,5 +1,7 @@
 export type TransferEvent = {
   txHash: string;
+  blockNumber: number;
+  logIndex: number;
   from: string;
   to: string;
   token: string;
@@ -16,3 +18,10 @@ export type EmploymentResult = {
   factCommitment: string;
 };
 
+export type TransferSource = "rpc" | "fallback";
+
+export type TransferSourceResult = {
+  transfers: TransferEvent[];
+  dataSource: TransferSource;
+  reason?: string;
+};
