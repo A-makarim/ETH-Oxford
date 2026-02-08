@@ -1,0 +1,9 @@
+{
+  "network": "coston2",
+  "chainId": 114,
+  "employerRegistry": "0x703d045D9D648D303cBc1323C6F6181399F5a718",
+  "attestationStorage": "0x258b72005DA1A5627062e647aB536B1b6590d4f5",
+  "groth16Verifier": "0x1A3f55e00eEC2CeB15D24bB3319B20E688417b6c",
+  "cvVerifier": "0x9A86dB66B4bbd3ddC3D8B6a2C881558DC893949A",
+  "deployedAt": "2026-02-07T22:34:07.016Z"
+}
