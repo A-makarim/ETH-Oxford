@@ -11,6 +11,7 @@ Primary coordination document:
 2. Copy `.env.example` to `.env` and fill required values.
 3. Run contract tests: `npm run test:contracts`
 4. Deploy contracts (Flare Coston2): `npm run deploy:testnet`
+5. Build ZK artifacts: `npm run zk:inputs && npm run zk:build && npm run zk:check`
 
 ## Layout
 - `contracts/`: Solidity contracts
