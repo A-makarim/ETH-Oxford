@@ -1,121 +1,221 @@
-import { useMemo, useState } from "react";
-import { BrowserProvider, Contract, getAddress } from "ethers";
+import { Suspense, lazy, useMemo, useState } from "react";
+import { useAccount, useConnect, useDisconnect, usePublicClient, useSwitchChain } from "wagmi";
+import { useWalletClient } from "wagmi";
+import { getAddress, isAddress } from "viem";
+import { encodeAbiParameters, keccak256 } from "viem";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { cvVerifierAbi } from "./abis/cvVerifier";
 
-type VerifyState = "idle" | "connecting" | "verifying" | "success" | "error";
-
-function parseSignals(raw: string): bigint[] {
-  return raw
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean)
-    .map((x) => BigInt(x));
-}
+const ClaimGraph3D = lazy(() =>
+  import("./components/ClaimGraph3D").then((module) => ({ default: module.ClaimGraph3D }))
+);
 
 export default function App() {
-  const [wallet, setWallet] = useState<string>("");
-  const [proofHex, setProofHex] = useState<string>("0x1234");
-  const [publicSignalsRaw, setPublicSignalsRaw] = useState<string>("11,22,33,1");
-  const [verifyState, setVerifyState] = useState<VerifyState>("idle");
-  const [message, setMessage] = useState<string>("No verification yet.");
-  const [verified, setVerified] = useState<boolean>(false);
+  const [activeNodeId, setActiveNodeId] = useState<string>("root");
+  const [showCv, setShowCv] = useState<boolean>(false);
+  const [hudCollapsed, setHudCollapsed] = useState<boolean>(false);
+  const [proofHex, setProofHex] = useState<string>("0x");
+  const [publicSignalsRaw, setPublicSignalsRaw] = useState<string>("0");
+  const [verifyState, setVerifyState] = useState<"idle" | "verifying" | "success" | "error">("idle");
+  const [verifyMessage, setVerifyMessage] = useState<string>("No verification yet.");
+  const [txHash, setTxHash] = useState<string>("");
+  const [proofHash, setProofHash] = useState<string>("");
 
+  const { address, isConnected } = useAccount();
+  const { connect, connectors, isPending, error: connectError } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
+
+  const expectedChainId = Number(import.meta.env.VITE_CHAIN_ID || 114);
   const contractAddress = useMemo(() => {
-    const candidate = import.meta.env.VITE_CV_VERIFIER_ADDRESS || "";
-    return candidate ? getAddress(candidate) : "";
-  }, []);
-
-  async function connectWallet(): Promise<void> {
-    try {
-      setVerifyState("connecting");
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) {
-        throw new Error("No injected wallet found");
-      }
-      const provider = new BrowserProvider(ethereum);
-      const accounts = await provider.send("eth_requestAccounts", []);
-      setWallet(accounts[0] ?? "");
-      setVerifyState("idle");
-      setMessage("Wallet connected.");
-    } catch (error) {
-      setVerifyState("error");
-      setMessage((error as Error).message);
+    const raw = import.meta.env.VITE_CV_VERIFIER_ADDRESS;
+    if (!raw || !isAddress(raw)) {
+      return "";
     }
+    return getAddress(raw);
+  }, []);
+  const chainMismatch =
+    typeof expectedChainId === "number" && publicClient?.chain?.id !== expectedChainId;
+
+  const highlights = useMemo(
+    () => [
+      { id: "education", label: "Education verified" },
+      { id: "employment", label: "Employment verified" },
+      { id: "proof", label: "Proof hash recorded on-chain" },
+    ],
+    []
+  );
+
+  function parseSignals(raw: string): bigint[] {
+    return raw
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => BigInt(value));
   }
 
-  async function verifyProof(): Promise<void> {
+  async function handleVerify(): Promise<void> {
     try {
+      if (!walletClient || !publicClient) {
+        throw new Error("Wallet not connected.");
+      }
       if (!contractAddress) {
-        throw new Error("Missing VITE_CV_VERIFIER_ADDRESS");
+        throw new Error("Missing VITE_CV_VERIFIER_ADDRESS.");
+      }
+      if (chainMismatch) {
+        throw new Error("Wrong network. Switch to the configured chain.");
       }
 
       setVerifyState("verifying");
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) {
-        throw new Error("No injected wallet found");
-      }
-
-      const provider = new BrowserProvider(ethereum);
-      const signer = await provider.getSigner();
-      const contract = new Contract(contractAddress, cvVerifierAbi, signer);
+      setVerifyMessage("Submitting proof...");
 
       const publicSignals = parseSignals(publicSignalsRaw);
-      const tx = await contract.verifyCVProof(proofHex, publicSignals);
-      const receipt = await tx.wait();
-      const txHash = receipt?.hash || tx.hash;
+      const normalizedProof = proofHex.startsWith("0x") ? proofHex : `0x${proofHex}`;
+
+      const hash = await walletClient.writeContract({
+        address: contractAddress,
+        abi: cvVerifierAbi,
+        functionName: "verifyCVProof",
+        args: [normalizedProof, publicSignals],
+      });
+
+      setTxHash(hash);
+
+      const computedProofHash = keccak256(
+        encodeAbiParameters(
+          [{ type: "bytes" }, { type: "uint256[]" }],
+          [normalizedProof, publicSignals]
+        )
+      );
+      setProofHash(computedProofHash);
+
+      await publicClient.waitForTransactionReceipt({ hash });
 
       setVerifyState("success");
-      setVerified(true);
-      setMessage(`Proof verified on-chain. Tx: ${txHash}`);
+      setVerifyMessage("Proof verified on-chain.");
     } catch (error) {
       setVerifyState("error");
-      setVerified(false);
-      setMessage((error as Error).message);
+      setVerifyMessage((error as Error).message || "Verification failed.");
     }
   }
 
   return (
-    <div className="page">
-      <header className="hero">
-        <h1>SovereignCV Recruiter Viewer</h1>
-        <p>Verify privacy-preserving candidate proofs without viewing wallet or salary data.</p>
-        <div className="actions">
-          <button onClick={connectWallet} disabled={verifyState === "connecting"}>
-            {wallet ? "Wallet Connected" : "Connect Wallet"}
-          </button>
-          <button onClick={verifyProof} disabled={!wallet || verifyState === "verifying"}>
-            Verify CV
-          </button>
+    <main className={showCv ? "app-shell cv-open" : "app-shell"}>
+      <section className="graph-stage">
+        <ErrorBoundary
+          fallback={
+            <div className="graph-fallback">
+              Graph failed to load. Check the console for details.
+            </div>
+          }
+        >
+          <Suspense fallback={<div className="graph-fallback">Loading graph...</div>}>
+            <ClaimGraph3D activeNodeId={activeNodeId} onSelectNode={setActiveNodeId} />
+          </Suspense>
+        </ErrorBoundary>
+      </section>
+      <section className={hudCollapsed ? "hud-shell collapsed" : "hud-shell"}>
+        <div className="hud">
+          <div className="hud-card">
+            <div className="hud-title">Wallet</div>
+            {isConnected ? (
+              <div className="wallet-row">
+                <span className="wallet-address">{address}</span>
+                <button className="hud-btn ghost" onClick={() => disconnect()}>
+                  Disconnect
+                </button>
+              </div>
+            ) : (
+              <button
+                className="hud-btn"
+                onClick={() => connect({ connector: connectors[0] })}
+                disabled={isPending}
+              >
+                {isPending ? "Connecting..." : "Connect Wallet"}
+              </button>
+            )}
+            {connectError && <p className="hud-error">{connectError.message}</p>}
+            {chainMismatch && (
+              <div className="chain-warning">
+                <span>Wrong network.</span>
+                <button
+                  className="hud-btn ghost"
+                  onClick={() => switchChain({ chainId: expectedChainId })}
+                >
+                  Switch
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="hud-card">
+            <div className="hud-title">Proof</div>
+            <label className="hud-label">
+              Proof Hex
+              <input
+                className="hud-input"
+                value={proofHex}
+                onChange={(event) => setProofHex(event.target.value)}
+                placeholder="0x..."
+              />
+            </label>
+            <label className="hud-label">
+              Public Signals
+              <input
+                className="hud-input"
+                value={publicSignalsRaw}
+                onChange={(event) => setPublicSignalsRaw(event.target.value)}
+                placeholder="1,2,3"
+              />
+            </label>
+            <button
+              className="hud-btn"
+              onClick={handleVerify}
+              disabled={!isConnected || verifyState === "verifying" || chainMismatch}
+            >
+              {verifyState === "verifying" ? "Verifying..." : "Verify CV"}
+            </button>
+            <p className={verifyState === "error" ? "hud-error" : "hud-message"}>{verifyMessage}</p>
+            {txHash && <p className="hud-meta">Tx: {txHash}</p>}
+            {proofHash && <p className="hud-meta">Proof hash: {proofHash}</p>}
+          </div>
+          <div className="hud-card">
+            <div className="hud-title">Highlights</div>
+            <ul className="hud-list">
+              {highlights.map((item) => (
+                <li key={item.id} className={verifyState === "success" ? "hud-pill active" : "hud-pill"}>
+                  {item.label}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </header>
-
-      <main className="layout">
-        <section className="card">
-          <h2>Candidate CV</h2>
-          <p className={verified ? "line verified" : "line"}>
-            BSc Computer Science - Verified on Flare
-          </p>
-          <p className={verified ? "line verified" : "line"}>
-            Software Engineer (12 months) - Verified on Plasma
-          </p>
-          <p className="line muted">Private wallet and salary fields remain hidden.</p>
-        </section>
-
-        <section className="card">
-          <h2>Proof Input</h2>
-          <label>
-            Proof Hex
-            <input value={proofHex} onChange={(e) => setProofHex(e.target.value)} />
-          </label>
-          <label>
-            Public Signals (comma-separated)
-            <input value={publicSignalsRaw} onChange={(e) => setPublicSignalsRaw(e.target.value)} />
-          </label>
-          <p className="status">Status: {verifyState}</p>
-          <p className="message">{message}</p>
-        </section>
-      </main>
-    </div>
+      </section>
+      <button
+        className={hudCollapsed ? "hud-toggle collapsed" : "hud-toggle"}
+        onClick={() => setHudCollapsed((prev) => !prev)}
+        aria-label={hudCollapsed ? "Expand controls" : "Collapse controls"}
+      >
+        {hudCollapsed ? ">" : "<"}
+      </button>
+      <button
+        className={showCv ? "cv-toggle open" : "cv-toggle"}
+        onClick={() => setShowCv((prev) => !prev)}
+        aria-label={showCv ? "Hide CV" : "Show CV"}
+      >
+        {showCv ? ">" : "<"}
+      </button>
+      <aside className={showCv ? "cv-drawer open" : "cv-drawer"} aria-hidden={!showCv}>
+        <div className="cv-header">
+          <span>Candidate CV</span>
+        </div>
+        <iframe
+          className="cv-frame"
+          src="/resume_daad.pdf#toolbar=0&navpanes=0&scrollbar=0&view=FitH"
+          title="Candidate CV"
+        />
+      </aside>
+    </main>
   );
 }
-
