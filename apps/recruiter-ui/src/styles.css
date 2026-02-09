@@ -289,8 +289,9 @@ body {
   cursor: pointer;
 }
 
-.graph-node .node-halo {
-  fill: rgba(214, 224, 240, 0.2);
+.graph-node .node-glow {
+  fill: url(#nodeGlowIdle);
+  opacity: 0.8;
 }
 
 .graph-node .node-core {
@@ -299,22 +300,21 @@ body {
 
 .graph-node .node-label {
   fill: rgba(255, 255, 255, 0.9);
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
 
-.graph-node.pending .node-halo {
-  fill: rgba(255, 209, 102, 0.3);
+.graph-node.pending .node-glow {
+  fill: url(#nodeGlowPending);
 }
 
 .graph-node.pending .node-core {
   fill: #ffd166;
 }
 
-.graph-node.verified .node-halo {
-  fill: rgba(125, 255, 181, 0.35);
-  animation: verifiedPulse 2.6s ease-in-out infinite;
+.graph-node.verified .node-glow {
+  fill: url(#nodeGlowVerified);
 }
 
 .graph-node.verified .node-core {
@@ -322,24 +322,20 @@ body {
   animation: verifiedCore 2s ease-in-out infinite;
 }
 
-.graph-node.failed .node-halo {
-  fill: rgba(255, 123, 123, 0.28);
+.graph-node.failed .node-glow {
+  fill: url(#nodeGlowFailed);
 }
 
 .graph-node.failed .node-core {
   fill: #ff7b7b;
 }
 
-.graph-node.active .node-halo {
-  fill: rgba(255, 255, 255, 0.42);
+.graph-node.active .node-glow {
+  fill: url(#nodeGlowActive);
 }
 
 .graph-node.active .node-core {
   fill: #ffffff;
-}
-
-.graph-node.verified.celebrating .node-halo {
-  animation: verifiedPulse 1.8s ease-in-out infinite;
 }
 
 .graph-node.verified.celebrating .node-core {
@@ -352,18 +348,6 @@ body {
   }
   100% {
     stroke-dashoffset: 0;
-  }
-}
-
-@keyframes verifiedPulse {
-  0%,
-  100% {
-    opacity: 0.45;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.9;
-    transform: scale(1.08);
   }
 }
 

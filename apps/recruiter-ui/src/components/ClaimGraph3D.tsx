@@ -102,13 +102,31 @@ export function ClaimGraph3D({
               repeatCount="indefinite"
             />
           </linearGradient>
-          <filter id="nodeGlow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="4" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+          <radialGradient id="nodeGlowIdle" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(214, 224, 240, 0.28)" />
+            <stop offset="58%" stopColor="rgba(214, 224, 240, 0.08)" />
+            <stop offset="100%" stopColor="rgba(214, 224, 240, 0)" />
+          </radialGradient>
+          <radialGradient id="nodeGlowPending" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(255, 209, 102, 0.3)" />
+            <stop offset="58%" stopColor="rgba(255, 209, 102, 0.1)" />
+            <stop offset="100%" stopColor="rgba(255, 209, 102, 0)" />
+          </radialGradient>
+          <radialGradient id="nodeGlowVerified" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(125, 255, 181, 0.32)" />
+            <stop offset="58%" stopColor="rgba(125, 255, 181, 0.12)" />
+            <stop offset="100%" stopColor="rgba(125, 255, 181, 0)" />
+          </radialGradient>
+          <radialGradient id="nodeGlowFailed" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(255, 123, 123, 0.3)" />
+            <stop offset="58%" stopColor="rgba(255, 123, 123, 0.1)" />
+            <stop offset="100%" stopColor="rgba(255, 123, 123, 0)" />
+          </radialGradient>
+          <radialGradient id="nodeGlowActive" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(255, 255, 255, 0.35)" />
+            <stop offset="58%" stopColor="rgba(255, 255, 255, 0.14)" />
+            <stop offset="100%" stopColor="rgba(255, 255, 255, 0)" />
+          </radialGradient>
         </defs>
 
         {links.map((link) => (
@@ -139,9 +157,9 @@ export function ClaimGraph3D({
               transform={`translate(${node.x}, ${node.y})`}
               onClick={() => onSelectNode(node.id)}
             >
-              <circle className="node-halo" r={node.ring === 0 ? 42 : 26} filter="url(#nodeGlow)" />
-              <circle className="node-core" r={node.ring === 0 ? 18 : 10} />
-              <text className="node-label" x={0} y={node.ring === 0 ? 58 : 38} textAnchor="middle">
+              <circle className="node-glow" r={node.ring === 0 ? 34 : 21} />
+              <circle className="node-core" r={node.ring === 0 ? 10 : 6.5} />
+              <text className="node-label" x={0} y={node.ring === 0 ? 46 : 32} textAnchor="middle">
                 {node.label}
               </text>
               <title>{node.subLabel}</title>
